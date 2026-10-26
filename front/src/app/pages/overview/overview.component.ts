@@ -30,8 +30,8 @@ interface Provider {
       </div>
       <div class="card">
         <h3>Próxima fase</h3>
-        <div class="value">Carteira</div>
-        <div class="hint">Cadastro manual e dashboard</div>
+        <div class="value">Alertas</div>
+        <div class="hint">alertas, relatórios e importação</div>
       </div>
     </div>
 
@@ -55,9 +55,16 @@ interface Provider {
         <div class="row">
           <div>
             <div class="name">3. Cadastre sua carteira</div>
-            <div class="meta">Em breve: ativos, transações e alocação.</div>
+            <div class="meta">Ativos, transações, posições e alocação.</div>
           </div>
-          <span class="badge off">próxima fase</span>
+          <a routerLink="/app/portfolio" class="btn secondary">Abrir carteira</a>
+        </div>
+        <div class="row">
+          <div>
+            <div class="name">4. Compare renda fixa</div>
+            <div class="meta">CDB, LCI/LCA e Tesouro com IR e isenções.</div>
+          </div>
+          <a routerLink="/app/fixed-income" class="btn secondary">Comparar</a>
         </div>
       </div>
     </section>
