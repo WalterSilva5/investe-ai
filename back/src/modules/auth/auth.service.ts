@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as argon2 from 'argon2';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -149,7 +149,7 @@ export class AuthService {
   }
 
   async issueTokens(userId: string, email: string): Promise<TokenPair> {
-    const payload = { sub: userId, email };
+    const payload = { sub: userId, email, jti: randomUUID() };
     const accessTtl = (this.config.get<string>('JWT_ACCESS_TTL') || '15m') as any;
     const refreshTtl = (this.config.get<string>('JWT_REFRESH_TTL') || '7d') as any;
     const accessToken = await this.jwt.signAsync(payload, {
