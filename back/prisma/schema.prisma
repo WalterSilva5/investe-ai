@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum AssetType {
+  STOCK
+  FII
+  ETF
+  FIXED_INCOME
+  CRYPTO
+  CASH
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  DEPOSIT
+  WITHDRAW
+  DIVIDEND
+  INTEREST
+}
+
+enum MessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+  TOOL
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("free")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships  Membership[]
+  portfolios   Portfolio[]
+  credentials  ProviderCredential[]
+  conversations Conversation[]
+  audits       AuditEvent[]
+  policies     InvestmentPolicy[]
+  goals        Goal[]
+  alerts       AlertRule[]
+  usages       AiUsage[]
+  imports      ImportJob[]
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String?
+  name           String?
+  googleId       String?   @unique
+  emailVerifiedAt DateTime?
+  status         String    @default("active")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+  conversations Conversation[]
+  audits        AuditEvent[]
+  usages        AiUsage[]
+}
+
+model Membership {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  role     Role   @default(MEMBER)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ProviderCredential {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String?
+  providerId   String
+  encryptedKey String
+  iv           String
+  authTag      String
+  baseUrl      String?
+  model        String?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, providerId])
+  @@index([tenantId])
+}
+
+model Conversation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String
+  title      String?
+  providerId String?
+  model      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([tenantId, createdAt])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  tokensIn       Int         @default(0)
+  tokensOut      Int         @default(0)
+  cost           Decimal     @default(0) @db.Decimal(18, 6)
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model AuditEvent {
+  id       String   @id @default(cuid())
+  tenantId String
+  userId   String?
+  action   String
+  entity   String?
+  entityId String?
+  metadata Json?
+  ip       String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+model Portfolio {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  currency  String   @default("BRL")
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accounts     Account[]
+  transactions Transaction[]
+  positions    Position[]
+
+  @@index([tenantId])
+}
+
+model Account {
+  id          String   @id @default(cuid())
+  portfolioId String
+  name        String
+  institution String?
+  type        String   @default("BROKER")
+  createdAt   DateTime @default(now())
+
+  portfolio    Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([portfolioId])
+}
+
+model Asset {
+  id       String    @id @default(cuid())
+  symbol   String
+  name     String
+  type     AssetType
+  currency String    @default("BRL")
+  metadata Json?
+  createdAt DateTime @default(now())
+
+  prices       Price[]
+  transactions Transaction[]
+  positions    Position[]
+
+  @@unique([symbol, type])
+  @@index([type])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  portfolioId String
+  accountId   String?
+  assetId     String
+  type        TransactionType
+  quantity    Decimal         @db.Decimal(18, 6)
+  price       Decimal         @db.Decimal(18, 6)
+  fees        Decimal         @default(0) @db.Decimal(18, 6)
+  date        DateTime
+  notes       String?
+  createdAt   DateTime        @default(now())
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  account   Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  asset     Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([portfolioId, date])
+  @@index([assetId])
+}
+
+model Position {
+  id           String   @id @default(cuid())
+  portfolioId  String
+  assetId      String
+  quantity     Decimal  @default(0) @db.Decimal(18, 6)
+  averagePrice Decimal  @default(0) @db.Decimal(18, 6)
+  invested     Decimal  @default(0) @db.Decimal(18, 6)
+  updatedAt    DateTime @updatedAt
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  asset     Asset     @relation(fields: [assetId], references: [id])
+
+  @@unique([portfolioId, assetId])
+}
+
+model Price {
+  id        String   @id @default(cuid())
+  assetId   String
+  date      DateTime
+  close     Decimal  @db.Decimal(18, 6)
+  source    String
+  fetchedAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, date])
+  @@index([assetId, date])
+}
+
+model FxRate {
+  id     String   @id @default(cuid())
+  pair   String
+  date   DateTime
+  rate   Decimal  @db.Decimal(18, 6)
+  source String
+  fetchedAt DateTime @default(now())
+
+  @@unique([pair, date])
+}
+
+model MacroSeries {
+  id     String   @id @default(cuid())
+  code   String
+  date   DateTime
+  value  Decimal  @db.Decimal(18, 6)
+  source String
+  fetchedAt DateTime @default(now())
+
+  @@unique([code, date])
+  @@index([code, date])
+}
+
+model FixedIncomeRate {
+  id        String   @id @default(cuid())
+  issuer    String
+  product   String
+  indexer   String
+  rate      Decimal  @db.Decimal(18, 6)
+  maturity  DateTime?
+  source    String
+  fetchedAt DateTime @default(now())
+
+  @@index([issuer, product])
+}
+
+model InvestmentPolicy {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  riskProfile      String?
+  horizon          String?
+  targetAllocation Json?
+  bands            Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Goal {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  targetAmount Decimal  @db.Decimal(18, 6)
+  targetDate   DateTime?
+  priority     Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model AlertRule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  type      String
+  condition Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events AlertEvent[]
+
+  @@index([tenantId])
+}
+
+model AlertEvent {
+  id        String   @id @default(cuid())
+  ruleId    String
+  firedAt   DateTime @default(now())
+  payload   Json?
+
+  rule AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, firedAt])
+}
+
+model AiUsage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  providerId String
+  model     String
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  cost      Decimal  @default(0) @db.Decimal(18, 6)
+  task      String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ImportJob {
+  id        String   @id @default(cuid())
+  tenantId  String
+  status    String   @default("PENDING")
+  filename  String?
+  result    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
