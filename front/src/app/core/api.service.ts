@@ -14,4 +14,8 @@ export class ApiService {
   post<T>(path: string, body: unknown): Observable<T> {
     return this.http.post<T>(`${API_BASE_URL}${path}`, body);
   }
+
+  delete<T>(path: string): Observable<T> {
+    return this.http.delete<T>(`${API_BASE_URL}${path}`);
+  }
 }

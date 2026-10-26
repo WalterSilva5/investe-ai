@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
 import { ChatMessage } from '../ai-provider/openai-compatible.provider';
+import { PortfoliosService } from '../portfolios/portfolios.service';
 import { ChatDto } from './dto/chat.dto';
 
 const SYSTEM_PROMPT = `Você é o assistente do wsi-invest-ai, uma ferramenta de análise de investimentos.
@@ -24,6 +25,7 @@ export class AiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: AiProviderRegistry,
+    private readonly portfolios: PortfoliosService,
   ) {}
 
   async chat(tenantId: string, userId: string, dto: ChatDto) {
@@ -58,6 +60,12 @@ export class AiService {
 
     const history: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'system',
+        content: `Contexto da carteira do usuário (dados reais, ${new Date().toISOString()}): ${JSON.stringify(
+          await this.portfolios.aiContext(tenantId),
+        )}. Use apenas estes números; se o dado não estiver aqui, diga que não tem.`,
+      },
       ...conversation.messages.map((m) => ({
         role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
         content: m.content,

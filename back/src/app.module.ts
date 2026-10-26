@@ -5,6 +5,11 @@ import { CommonModule } from './common/common.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
+import { AssetsModule } from './modules/assets/assets.module';
+import { PortfoliosModule } from './modules/portfolios/portfolios.module';
+import { TransactionsModule } from './modules/transactions/transactions.module';
+import { FixedIncomeModule } from './modules/fixed-income/fixed-income.module';
+import { MarketModule } from './modules/market/market.module';
 import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
 import { AiModule } from './modules/ai/ai.module';
 
@@ -16,6 +21,11 @@ import { AiModule } from './modules/ai/ai.module';
     HealthModule,
     AuthModule,
     TenantsModule,
+    AssetsModule,
+    PortfoliosModule,
+    TransactionsModule,
+    FixedIncomeModule,
+    MarketModule,
     AiProviderModule,
     AiModule,
   ],

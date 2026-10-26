@@ -69,3 +69,26 @@
 3. `market-data` → `fixed-income` → `analysis`.
 4. Tools do agente → auditoria → quotas.
 5. `alerts` → `reports` → `import` → `admin`.
+
+## Status da implementação
+
+| Módulo | Status |
+|---|---|
+| `health` | ✅ implementado |
+| `auth` | ✅ implementado (e-mail/senha + Google OAuth opcional + refresh rotativo) |
+| `users` | ✅ via `GET /auth/me` (módulo dedicado depois) |
+| `tenants` | ✅ listagem e isolamento |
+| `assets` | ✅ CRUD básico |
+| `portfolios` | ✅ CRUD, contas, posições, alocação e resumo |
+| `transactions` | ✅ criação/exclusão + recálculo de posição |
+| `market-data` | ✅ macro BCB (Selic/IPCA/CDI) |
+| `fixed-income` | ✅ simulação e comparação (IR/isenção) |
+| `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
+| `ai` | ✅ chat com contexto da carteira, histórico, uso e auditoria |
+| `audit` | 🟡 gravação de eventos de IA; tela depois |
+| `analysis` | 🟡 resumo/runway no serviço de carteira; módulo dedicado depois |
+| `alerts` | ⏳ |
+| `reports` | ⏳ |
+| `import` | ⏳ |
+| `admin` | ⏳ |
+
