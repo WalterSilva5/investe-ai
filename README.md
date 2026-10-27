@@ -68,7 +68,10 @@ Fundação + carteira + renda fixa + macro + agente com contexto da carteira imp
 - Carteira manual: ativos, transações, posições, alocação, resumo.
 - Renda fixa: simulação e comparação com IR/isenção.
 - Macro: Selic, IPCA e CDI via BCB.
-- IA: registry multi-provedor, OpenCode padrão, chaves criptografadas, chat com **tools determinísticas** (carteira, macro, renda fixa), citações, uso e auditoria.
+- Alertas de alocação máxima e macro.
+- IA: registry multi-provedor, OpenCode padrão, chaves criptografadas, chat com **tools determinísticas** (carteira, macro, renda fixa), citações, **quota mensal**, uso e auditoria.
+- **Testes de isolamento multi-tenant** cobrindo carteira, resumo e transações.
+- **Alertas** de alocação máxima e macro, com avaliação sob demanda.
 - Frontend: login, visão geral, carteira, renda fixa, chat e configuração de provedores.
 
 Próximo: tools do agente com citações, alertas, relatórios, importação CSV e testes de isolamento.

@@ -84,10 +84,10 @@
 | `market-data` | ✅ macro BCB (Selic/IPCA/CDI) |
 | `fixed-income` | ✅ simulação e comparação (IR/isenção) |
 | `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
-| `ai` | ✅ chat com tools (carteira/macro/renda fixa), citações, histórico, uso e auditoria |
+| `ai` | ✅ chat com tools (carteira/macro/renda fixa), citações, quota mensal, histórico, uso e auditoria |
 | `audit` | 🟡 gravação de eventos de IA; tela depois |
 | `analysis` | 🟡 resumo/runway no serviço de carteira; módulo dedicado depois |
-| `alerts` | ⏳ |
+| `alerts` | ✅ CRUD + avaliação (alocação máxima e macro) |
 | `reports` | ⏳ |
 | `import` | ⏳ |
 | `admin` | ⏳ |

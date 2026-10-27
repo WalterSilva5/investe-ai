@@ -10,6 +10,14 @@ interface Provider {
   model: string;
 }
 
+interface AiUsage {
+  quota: number;
+  used: number;
+  remaining: number;
+  percent: number;
+  unlimited: boolean;
+}
+
 @Component({
   selector: 'app-overview',
   imports: [RouterLink],
@@ -27,6 +35,11 @@ interface Provider {
         <h3>Provedores configurados</h3>
         <div class="value">{{ configured() }} / {{ providers().length }}</div>
         <div class="hint">OpenCode é o padrão inicial</div>
+      </div>
+      <div class="card">
+        <h3>Uso de IA no mês</h3>
+        <div class="value">{{ usageLabel() }}</div>
+        <div class="hint">{{ usageHint() }}</div>
       </div>
       <div class="card">
         <h3>Próxima fase</h3>
@@ -76,6 +89,7 @@ export class OverviewComponent {
 
   readonly providers = signal<Provider[]>([]);
   readonly configured = signal(0);
+  readonly usage = signal<AiUsage | null>(null);
 
   constructor() {
     this.api.get<Provider[]>('/ai/providers').subscribe({
@@ -84,9 +98,25 @@ export class OverviewComponent {
         this.configured.set(items.filter((p) => p.configured).length);
       },
     });
+    this.api.get<AiUsage>('/ai/usage').subscribe({
+      next: (usage) => this.usage.set(usage),
+    });
   }
 
   tenantName(): string {
     return this.auth.memberships()[0]?.tenant?.name || '—';
+  }
+
+  usageLabel(): string {
+    const usage = this.usage();
+    if (!usage) return '—';
+    return usage.unlimited ? '∞' : `${usage.percent.toFixed(0)}%`;
+  }
+
+  usageHint(): string {
+    const usage = this.usage();
+    if (!usage) return 'carregando';
+    if (usage.unlimited) return 'sem limite configurado';
+    return `${usage.used} / ${usage.quota} tokens`;
   }
 }

@@ -11,6 +11,7 @@ import {
 } from '../ai-provider/openai-compatible.provider';
 import { PortfoliosService } from '../portfolios/portfolios.service';
 import { AiToolsService, ToolCitation } from './ai-tools.service';
+import { AiUsageService } from './ai-usage.service';
 import { ChatDto } from './dto/chat.dto';
 
 const SYSTEM_PROMPT = `Você é o assistente do wsi-invest-ai, uma ferramenta de análise de investimentos.
@@ -49,9 +50,11 @@ export class AiService {
     private readonly registry: AiProviderRegistry,
     private readonly portfolios: PortfoliosService,
     private readonly tools: AiToolsService,
+    private readonly usage: AiUsageService,
   ) {}
 
   async chat(tenantId: string, userId: string, dto: ChatDto) {
+    await this.usage.assertQuota(userId, tenantId);
     const resolved = await this.registry.resolve(tenantId, dto.providerId, dto.model);
 
     let conversation = dto.conversationId

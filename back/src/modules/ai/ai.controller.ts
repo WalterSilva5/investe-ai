@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { AiService } from './ai.service';
 import { AiToolsService } from './ai-tools.service';
+import { AiUsageService } from './ai-usage.service';
 import { ChatDto } from './dto/chat.dto';
 
 @ApiTags('ai')
@@ -23,6 +24,7 @@ export class AiController {
   constructor(
     private readonly ai: AiService,
     private readonly tools: AiToolsService,
+    private readonly usage: AiUsageService,
   ) {}
 
   @Post('chat')
@@ -32,6 +34,14 @@ export class AiController {
     @Body() dto: ChatDto,
   ) {
     return this.ai.chat(tenantId, user.userId, dto);
+  }
+
+  @Get('usage')
+  aiUsage(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.usage.summary(user.userId, tenantId);
   }
 
   @Post('tools/:name')

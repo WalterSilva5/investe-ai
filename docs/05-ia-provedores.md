@@ -74,9 +74,11 @@ Regras:
 ## Uso e quota
 
 - `AiUsage` registra tokens, custo, latência, tarefa.
-- Quota mensal por usuário (tokens e/ou custo).
-- Alerta em 80%; bloqueio suave em 100%.
-- Painel de uso no admin.
+- `AiUsageService` soma tokens do mês por usuário.
+- Quota mensal via `AI_MONTHLY_TOKEN_QUOTA` (0 = sem limite).
+- `GET /api/ai/usage` devolve usado, quota, restante e reset.
+- Ao atingir a quota, o chat responde **429** com mensagem clara.
+- Painel de uso na visão geral.
 
 ## Agente e tools
 
