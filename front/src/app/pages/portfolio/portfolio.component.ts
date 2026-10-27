@@ -88,6 +88,7 @@ interface Transaction {
         <button class="btn secondary" (click)="csvInput.click()">Importar CSV</button>
         <button class="btn secondary" (click)="downloadTemplate()">Modelo CSV</button>
         <button class="btn secondary" (click)="downloadReport()">Exportar CSV</button>
+        <button class="btn secondary" (click)="refreshQuotes()">Atualizar cotações</button>
         <input #csvInput type="file" accept=".csv,text/csv" style="display:none" (change)="onFileSelected($event)" />
       </div>
     </div>
@@ -432,6 +433,21 @@ export class PortfolioComponent {
       next: (blob) => this.saveBlob(blob, 'relatorio-carteira.csv'),
       error: (err) => this.fail(err),
     });
+  }
+
+  refreshQuotes() {
+    this.api
+      .post<{ total: number; updated: number; failed: number }>('/market/refresh', {})
+      .subscribe({
+        next: (res) => {
+          this.ok.set(res.failed === 0);
+          this.message.set(
+            `Cotações: ${res.updated}/${res.total} atualizadas${res.failed ? `, ${res.failed} falha(s)` : ''}.`,
+          );
+          this.loadPortfolio(this.selectedPortfolioId);
+        },
+        error: (err) => this.fail(err),
+      });
   }
 
   private saveBlob(blob: Blob, filename: string) {

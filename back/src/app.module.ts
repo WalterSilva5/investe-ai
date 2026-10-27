@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './prisma/prisma.module';
 import { CommonModule } from './common/common.module';
 import { HealthModule } from './modules/health/health.module';
@@ -13,12 +14,14 @@ import { MarketModule } from './modules/market/market.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { ImportModule } from './modules/import/import.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
 import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     CommonModule,
     HealthModule,
@@ -32,6 +35,7 @@ import { AiModule } from './modules/ai/ai.module';
     AlertsModule,
     ImportModule,
     ReportsModule,
+    SchedulerModule,
     AiProviderModule,
     AiModule,
   ],

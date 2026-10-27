@@ -81,7 +81,8 @@
 | `assets` | ✅ CRUD básico |
 | `portfolios` | ✅ CRUD, contas, posições, alocação e resumo |
 | `transactions` | ✅ criação/exclusão + recálculo de posição |
-| `market-data` | ✅ macro BCB (Selic/IPCA/CDI) |
+| `market-data` | ✅ macro BCB + cotações (brapi/CoinGecko) |
+| `scheduler` | ✅ cron de cotações + alertas (dias úteis 18h) |
 | `fixed-income` | ✅ simulação e comparação (IR/isenção) |
 | `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
 | `ai` | ✅ chat com tools (carteira/macro/renda fixa), citações, quota mensal, histórico, uso e auditoria |

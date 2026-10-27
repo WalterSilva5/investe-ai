@@ -62,7 +62,7 @@ npm start
 
 ## Status
 
-Fundação + carteira + renda fixa + macro + agente com contexto da carteira implementados.
+Fundação + carteira + renda fixa + macro + alertas + importação/relatório + cotações + agente com tools.
 
 - Auth multi-tenant (e-mail/senha, Google OAuth opcional, refresh rotativo).
 - Carteira manual: ativos, transações, posições, alocação, resumo.
@@ -70,10 +70,9 @@ Fundação + carteira + renda fixa + macro + agente com contexto da carteira imp
 - Macro: Selic, IPCA e CDI via BCB.
 - Alertas de alocação máxima e macro.
 - Importação CSV de transações e relatório CSV da carteira.
+- Cotações B3/cripto com atualização manual e agendada (dias úteis, 18h).
 - IA: registry multi-provedor, OpenCode padrão, chaves criptografadas, chat com **tools determinísticas** (carteira, macro, renda fixa), citações, **quota mensal**, uso e auditoria.
 - **Testes de isolamento multi-tenant** cobrindo carteira, resumo e transações.
-- **Alertas** de alocação máxima e macro, com avaliação sob demanda.
-- **Importação CSV** de transações e **relatório CSV** da carteira.
-- Frontend: login, visão geral, carteira, renda fixa, chat e configuração de provedores.
+- Frontend: login, visão geral, carteira, renda fixa, alertas, chat e configuração de provedores.
 
-Próximo: tools do agente com citações, alertas, relatórios, importação CSV e testes de isolamento.
+Próximo: relatório PDF, RAG, admin/uso e hardening para usuários externos.
