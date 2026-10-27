@@ -11,6 +11,8 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { FixedIncomeModule } from './modules/fixed-income/fixed-income.module';
 import { MarketModule } from './modules/market/market.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
+import { ImportModule } from './modules/import/import.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
 import { AiModule } from './modules/ai/ai.module';
 
@@ -28,6 +30,8 @@ import { AiModule } from './modules/ai/ai.module';
     FixedIncomeModule,
     MarketModule,
     AlertsModule,
+    ImportModule,
+    ReportsModule,
     AiProviderModule,
     AiModule,
   ],

@@ -82,9 +82,13 @@ interface Transaction {
           }
         </select>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <input class="input" style="max-width:180px" [(ngModel)]="newPortfolioName" placeholder="nova carteira" />
         <button class="btn secondary" (click)="createPortfolio()">Criar</button>
+        <button class="btn secondary" (click)="csvInput.click()">Importar CSV</button>
+        <button class="btn secondary" (click)="downloadTemplate()">Modelo CSV</button>
+        <button class="btn secondary" (click)="downloadReport()">Exportar CSV</button>
+        <input #csvInput type="file" accept=".csv,text/csv" style="display:none" (change)="onFileSelected($event)" />
       </div>
     </div>
 
@@ -386,6 +390,57 @@ export class PortfolioComponent {
         this.message.set('Não foi possível excluir.');
       },
     });
+  }
+
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !this.selectedPortfolioId) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.api
+        .post<{ imported: number; errors: unknown[]; status: string }>('/import/transactions', {
+          portfolioId: this.selectedPortfolioId,
+          csv: String(reader.result || ''),
+        })
+        .subscribe({
+          next: (res) => {
+            this.ok.set(res.errors.length === 0);
+            this.message.set(
+              `Importação ${res.status}: ${res.imported} transação(ões), ${res.errors.length} erro(s).`,
+            );
+            this.loadPortfolio(this.selectedPortfolioId);
+          },
+          error: (err) => this.fail(err),
+        });
+    };
+    reader.readAsText(file);
+    input.value = '';
+  }
+
+  downloadTemplate() {
+    this.api.getBlob('/import/template').subscribe({
+      next: (blob) => this.saveBlob(blob, 'modelo-importacao.csv'),
+      error: (err) => this.fail(err),
+    });
+  }
+
+  downloadReport() {
+    if (!this.selectedPortfolioId) return;
+    this.api.getBlob(`/reports/portfolio/${this.selectedPortfolioId}/csv`).subscribe({
+      next: (blob) => this.saveBlob(blob, 'relatorio-carteira.csv'),
+      error: (err) => this.fail(err),
+    });
+  }
+
+  private saveBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   money(value: number): string {
