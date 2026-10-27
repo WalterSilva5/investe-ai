@@ -88,6 +88,7 @@ interface Transaction {
         <button class="btn secondary" (click)="csvInput.click()">Importar CSV</button>
         <button class="btn secondary" (click)="downloadTemplate()">Modelo CSV</button>
         <button class="btn secondary" (click)="downloadReport()">Exportar CSV</button>
+        <button class="btn secondary" (click)="downloadPdf()">Exportar PDF</button>
         <button class="btn secondary" (click)="refreshQuotes()">Atualizar cotações</button>
         <input #csvInput type="file" accept=".csv,text/csv" style="display:none" (change)="onFileSelected($event)" />
       </div>
@@ -431,6 +432,14 @@ export class PortfolioComponent {
     if (!this.selectedPortfolioId) return;
     this.api.getBlob(`/reports/portfolio/${this.selectedPortfolioId}/csv`).subscribe({
       next: (blob) => this.saveBlob(blob, 'relatorio-carteira.csv'),
+      error: (err) => this.fail(err),
+    });
+  }
+
+  downloadPdf() {
+    if (!this.selectedPortfolioId) return;
+    this.api.getBlob(`/reports/portfolio/${this.selectedPortfolioId}/pdf`).subscribe({
+      next: (blob) => this.saveBlob(blob, 'relatorio-carteira.pdf'),
       error: (err) => this.fail(err),
     });
   }

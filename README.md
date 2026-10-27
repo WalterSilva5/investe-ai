@@ -69,10 +69,10 @@ Fundação + carteira + renda fixa + macro + alertas + importação/relatório +
 - Renda fixa: simulação e comparação com IR/isenção.
 - Macro: Selic, IPCA e CDI via BCB.
 - Alertas de alocação máxima e macro.
-- Importação CSV de transações e relatório CSV da carteira.
+- Importação CSV de transações e relatório CSV/PDF da carteira.
 - Cotações B3/cripto com atualização manual e agendada (dias úteis, 18h).
 - IA: registry multi-provedor, OpenCode padrão, chaves criptografadas, chat com **tools determinísticas** (carteira, macro, renda fixa), citações, **quota mensal**, uso e auditoria.
 - **Testes de isolamento multi-tenant** cobrindo carteira, resumo e transações.
 - Frontend: login, visão geral, carteira, renda fixa, alertas, chat e configuração de provedores.
 
-Próximo: relatório PDF, RAG, admin/uso e hardening para usuários externos.
+Próximo: RAG, admin/uso e hardening para usuários externos.

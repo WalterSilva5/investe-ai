@@ -26,4 +26,18 @@ export class ReportsController {
       .header('Content-Disposition', `attachment; filename="portfolio-${id}.csv"`)
       .send(csv);
   }
+
+  @Get('portfolio/:id/pdf')
+  async portfolioPdf(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Res() response: Response,
+  ) {
+    const pdf = await this.reports.portfolioPdf(tenantId, id);
+    response
+      .status(200)
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="portfolio-${id}.pdf"`)
+      .send(pdf);
+  }
 }

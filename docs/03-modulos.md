@@ -89,7 +89,7 @@
 | `audit` | 🟡 gravação de eventos de IA; tela depois |
 | `analysis` | 🟡 resumo/runway no serviço de carteira; módulo dedicado depois |
 | `alerts` | ✅ CRUD + avaliação (alocação máxima e macro) |
-| `reports` | ✅ Relatório da carteira em CSV |
+| `reports` | ✅ Relatório da carteira em CSV e PDF |
 | `import` | ✅ CSV de transações (validação + recálculo de posição) |
 | `admin` | ⏳ |
 
