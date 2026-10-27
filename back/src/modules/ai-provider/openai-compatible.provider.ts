@@ -1,14 +1,33 @@
 import OpenAI from 'openai';
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+  name?: string;
+}
+
+export interface ToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string;
 }
 
 export interface ChatOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  tools?: ToolDefinition[];
 }
 
 export interface ChatResult {
@@ -16,6 +35,9 @@ export interface ChatResult {
   model: string;
   tokensIn: number;
   tokensOut: number;
+  toolCalls: ToolCall[];
+  finishReason?: string | null;
+  assistantMessage?: unknown;
 }
 
 export interface ProviderConfig {
@@ -44,17 +66,33 @@ export class OpenAICompatibleProvider {
     if (!model) {
       throw new Error('Nenhum modelo definido para este provedor.');
     }
+
     const response = await this.client.chat.completions.create({
       model,
-      messages,
+      messages: messages as never,
       temperature: options.temperature ?? 0.3,
       max_tokens: options.maxTokens,
+      ...(options.tools?.length
+        ? { tools: options.tools as never, tool_choice: 'auto' as never }
+        : {}),
     });
+
+    const choice = response.choices[0];
+    const message = choice?.message;
+    const toolCalls: ToolCall[] = (message?.tool_calls ?? []).map((call) => ({
+      id: call.id,
+      name: call.function.name,
+      arguments: call.function.arguments,
+    }));
+
     return {
-      content: response.choices[0]?.message?.content ?? '',
+      content: message?.content ?? '',
       model: response.model || model,
       tokensIn: response.usage?.prompt_tokens ?? 0,
       tokensOut: response.usage?.completion_tokens ?? 0,
+      toolCalls,
+      finishReason: choice?.finish_reason,
+      assistantMessage: message,
     };
   }
 

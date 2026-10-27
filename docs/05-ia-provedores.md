@@ -80,14 +80,21 @@ Regras:
 
 ## Agente e tools
 
-**Tools (determinísticas):**
-- `getPortfolio`, `getPositions`, `getAllocation`, `getTransactions`
-- `getQuote`, `getMacro`, `getFx`, `getTesouroRates`
-- `simulateFixedIncome`, `compareFixedIncome`
-- `checkRebalance`, `projectRunway`, `projectIncome`, `simulateScenario`
-- `searchDocuments`, `logDecision`
+**Tools implementadas (determinísticas):**
+- `get_portfolio_summary` — patrimônio, investido, resultado, alocação
+- `get_positions` — posições da carteira
+- `get_allocation` — alocação por tipo e por ativo
+- `get_macro` — Selic, IPCA e CDI (BCB)
+- `simulate_fixed_income` — CDB/LCI/LCA/Tesouro com IR/isenção
 
-**Fluxo:** intenção → tools → validação → resposta com fontes.
+**Fluxo:** pergunta → LLM escolhe tools → execução no servidor → LLM redige com os números retornados → resposta com **fontes/data**.
+
+- Limite de 4 passos de tool calling por resposta.
+- Se o provedor não suportar tools, há fallback para resposta com contexto injetado.
+- Cada execução é registrada em `ToolCall` (input/output/duração).
+- Citações são persistidas em `Message.citations` e devolvidas na API.
+
+**Teste determinístico:** `POST /api/ai/tools/:name` (auth + tenant) executa a ferramenta sem LLM.
 
 ## Guardrails
 

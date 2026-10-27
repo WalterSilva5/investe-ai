@@ -57,6 +57,13 @@ export class PortfoliosService {
     return portfolio;
   }
 
+  async getDefaultPortfolio(tenantId: string) {
+    return this.prisma.portfolio.findFirst({
+      where: { tenantId },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+  }
+
   async update(tenantId: string, id: string, dto: UpdatePortfolioDto) {
     await this.get(tenantId, id);
     if (dto.isDefault) {

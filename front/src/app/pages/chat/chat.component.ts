@@ -1,10 +1,18 @@
+import { SlicePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 
+interface Citation {
+  tool: string;
+  source: string;
+  asOf: string;
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  citations?: Citation[];
 }
 
 interface ChatResponse {
@@ -12,13 +20,14 @@ interface ChatResponse {
   content: string;
   providerId: string;
   model: string;
+  citations: Citation[];
   usage: { tokensIn: number; tokensOut: number };
   disclaimer: string;
 }
 
 @Component({
   selector: 'app-chat',
-  imports: [FormsModule],
+  imports: [FormsModule, SlicePipe],
   template: `
     <h1 class="page-title">Chat / análise</h1>
     <p class="page-sub">
@@ -29,14 +38,22 @@ interface ChatResponse {
       <div class="chat-box">
         @if (!messages().length) {
           <p class="muted small">
-            Exemplos: “Qual a diferença entre Tesouro Selic e CDB?”, “Como funciona o IR de LCI?”,
-            “O que é runway?”.
+            Exemplos: “Qual a minha alocação?”, “Quanto tenho investido?”, “Compare CDB 100% CDI com LCI 90%”,
+            “Como está a Selic e o IPCA?”.
           </p>
         }
         @for (message of messages(); track $index) {
           <div class="msg" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
             <div class="who">{{ message.role === 'user' ? 'Você' : 'Agente' }}</div>
             {{ message.content }}
+            @if (message.citations?.length) {
+              <div class="small muted" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
+                Fontes:
+                @for (citation of message.citations; track $index) {
+                  {{ citation.source }} ({{ citation.asOf | slice:0:10 }}){{ $last ? '' : ' · ' }}
+                }
+              </div>
+            }
           </div>
         }
         @if (loading()) {
@@ -93,7 +110,7 @@ export class ChatComponent {
           this.conversationId = res.conversationId;
           this.messages.update((items) => [
             ...items,
-            { role: 'assistant', content: res.content },
+            { role: 'assistant', content: res.content, citations: res.citations },
           ]);
           this.loading.set(false);
         },

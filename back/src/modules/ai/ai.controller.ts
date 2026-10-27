@@ -12,6 +12,7 @@ import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { AiService } from './ai.service';
+import { AiToolsService } from './ai-tools.service';
 import { ChatDto } from './dto/chat.dto';
 
 @ApiTags('ai')
@@ -19,7 +20,10 @@ import { ChatDto } from './dto/chat.dto';
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('ai')
 export class AiController {
-  constructor(private readonly ai: AiService) {}
+  constructor(
+    private readonly ai: AiService,
+    private readonly tools: AiToolsService,
+  ) {}
 
   @Post('chat')
   chat(
@@ -28,6 +32,15 @@ export class AiController {
     @Body() dto: ChatDto,
   ) {
     return this.ai.chat(tenantId, user.userId, dto);
+  }
+
+  @Post('tools/:name')
+  tool(
+    @TenantId() tenantId: string,
+    @Param('name') name: string,
+    @Body() args: Record<string, unknown>,
+  ) {
+    return this.tools.execute(name, args ?? {}, tenantId);
   }
 
   @Get('conversations')
