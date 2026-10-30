@@ -68,6 +68,7 @@ Fundação + carteira + renda fixa + macro + alertas + importação/relatório +
 - Carteira manual: ativos, transações, posições, alocação, resumo.
 - Renda fixa: simulação e comparação com IR/isenção.
 - Macro: Selic, IPCA e CDI via BCB.
+- Análise: runway, projeção de patrimônio e rebalanceamento (também via agente).
 - Alertas de alocação máxima e macro.
 - Importação CSV de transações e relatório CSV/PDF da carteira.
 - Cotações B3/cripto com atualização manual e agendada (dias úteis, 18h).

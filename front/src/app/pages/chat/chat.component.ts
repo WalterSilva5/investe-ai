@@ -25,6 +25,12 @@ interface ChatResponse {
   disclaimer: string;
 }
 
+interface ConversationSummary {
+  id: string;
+  title?: string;
+  updatedAt: string;
+}
+
 @Component({
   selector: 'app-chat',
   imports: [FormsModule, SlicePipe],
@@ -35,6 +41,21 @@ interface ChatResponse {
     </p>
 
     <div class="chat">
+      <div style="display:flex;gap:10px;align-items:center">
+        <select
+          class="input"
+          style="max-width:340px"
+          [value]="conversationId || ''"
+          (change)="onConversationChange($event)"
+        >
+          <option value="">+ Nova conversa</option>
+          @for (conversation of conversations(); track conversation.id) {
+            <option [value]="conversation.id">{{ conversation.title || conversation.id }}</option>
+          }
+        </select>
+        <span class="small muted">As respostas são por conversa, com citação de fontes.</span>
+      </div>
+
       <div class="chat-box">
         @if (!messages().length) {
           <p class="muted small">
@@ -87,9 +108,48 @@ export class ChatComponent {
   readonly messages = signal<ChatMessage[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly conversations = signal<ConversationSummary[]>([]);
 
   text = '';
   conversationId: string | null = null;
+
+  constructor() {
+    this.loadConversations();
+  }
+
+  loadConversations() {
+    this.api.get<ConversationSummary[]>('/ai/conversations').subscribe({
+      next: (conversations) => this.conversations.set(conversations),
+    });
+  }
+
+  onConversationChange(event: Event) {
+    const id = (event.target as HTMLSelectElement).value;
+    if (!id) {
+      this.conversationId = null;
+      this.messages.set([]);
+      return;
+    }
+    this.api
+      .get<{ messages: Array<{ role: string; content: string; citations?: Citation[] }> }>(
+        `/ai/conversations/${id}`,
+      )
+      .subscribe({
+        next: (conversation) => {
+          this.conversationId = id;
+          this.messages.set(
+            conversation.messages
+              .filter((message) => message.role === 'USER' || message.role === 'ASSISTANT')
+              .map((message) => ({
+                role: message.role === 'USER' ? 'user' : 'assistant',
+                content: message.content,
+                citations: message.citations,
+              })),
+          );
+        },
+        error: (err) => this.error.set(err?.error?.message || 'Falha ao carregar conversa.'),
+      });
+  }
 
   send() {
     const content = this.text.trim();
@@ -113,6 +173,7 @@ export class ChatComponent {
             { role: 'assistant', content: res.content, citations: res.citations },
           ]);
           this.loading.set(false);
+          this.loadConversations();
         },
         error: (err) => {
           this.error.set(

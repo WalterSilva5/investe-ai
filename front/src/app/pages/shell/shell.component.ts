@@ -11,6 +11,7 @@ import { AuthService } from '../../core/auth.service';
         <div class="logo">wsi<span>-invest-ai</span></div>
         <a routerLink="/app/overview" routerLinkActive="active">Visão geral</a>
         <a routerLink="/app/portfolio" routerLinkActive="active">Carteira</a>
+        <a routerLink="/app/analysis" routerLinkActive="active">Análise</a>
         <a routerLink="/app/fixed-income" routerLinkActive="active">Renda fixa</a>
         <a routerLink="/app/alerts" routerLinkActive="active">Alertas</a>
         <a routerLink="/app/chat" routerLinkActive="active">Chat / análise</a>

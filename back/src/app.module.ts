@@ -17,6 +17,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { ImportModule } from './modules/import/import.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { AnalysisModule } from './modules/analysis/analysis.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
@@ -41,6 +42,7 @@ import { AiModule } from './modules/ai/ai.module';
     ImportModule,
     ReportsModule,
     DocumentsModule,
+    AnalysisModule,
     SchedulerModule,
     AdminModule,
     AiProviderModule,

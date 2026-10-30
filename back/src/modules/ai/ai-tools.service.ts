@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FixedIncomeService } from '../fixed-income/fixed-income.service';
 import { DocumentsService } from '../documents/documents.service';
+import { AnalysisService } from '../analysis/analysis.service';
 import { MacroService } from '../market/macro.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
 import { ToolDefinition } from '../ai-provider/openai-compatible.provider';
@@ -23,6 +24,7 @@ export class AiToolsService {
     private readonly fixedIncome: FixedIncomeService,
     private readonly macroService: MacroService,
     private readonly documents: DocumentsService,
+    private readonly analysis: AnalysisService,
   ) {}
 
   definitions(): ToolDefinition[] {
@@ -79,6 +81,59 @@ export class AiToolsService {
       {
         type: 'function',
         function: {
+          name: 'project_runway',
+          description:
+            'Calcula por quantos meses o patrimônio atual sustenta uma despesa mensal (runway).',
+          parameters: {
+            type: 'object',
+            properties: {
+              monthlyExpense: { type: 'number' },
+              monthlyIncome: { type: 'number' },
+              rateAnnual: { type: 'number' },
+            },
+            required: ['monthlyExpense'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'project_income',
+          description:
+            'Projeta o valor futuro de um patrimônio com aportes mensais e uma taxa anual.',
+          parameters: {
+            type: 'object',
+            properties: {
+              principal: { type: 'number' },
+              monthlyContribution: { type: 'number' },
+              rateAnnual: { type: 'number' },
+              months: { type: 'integer' },
+            },
+            required: ['monthlyContribution', 'rateAnnual', 'months'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'check_rebalance',
+          description:
+            'Compara a alocação atual com uma meta e mostra o desvio e o valor a mover.',
+          parameters: {
+            type: 'object',
+            properties: {
+              target: {
+                type: 'object',
+                description: 'Percentuais por tipo (ex.: {"STOCK": 30, "FIXED_INCOME": 60})',
+              },
+            },
+            required: ['target'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'simulate_fixed_income',
           description:
             'Simula rendimento líquido de CDB, LCI, LCA ou Tesouro, com IR e isenção.',
@@ -124,6 +179,12 @@ export class AiToolsService {
           return await this.macro();
         case 'search_documents':
           return await this.searchDocuments(tenantId, String(args.query || ''));
+        case 'project_runway':
+          return await this.runway(tenantId, args);
+        case 'project_income':
+          return await this.projectIncome(tenantId, args);
+        case 'check_rebalance':
+          return await this.rebalance(tenantId, args);
         case 'simulate_fixed_income':
           return this.simulate(args);
         default:
@@ -207,6 +268,60 @@ export class AiToolsService {
         source: 'Notas do usuário',
         asOf,
       },
+    };
+  }
+
+  private async runway(
+    tenantId: string,
+    args: Record<string, unknown>,
+  ): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const result = await this.analysis.runway(tenantId, {
+      monthlyExpense: Number(args.monthlyExpense),
+      monthlyIncome: args.monthlyIncome != null ? Number(args.monthlyIncome) : undefined,
+      rateAnnual: args.rateAnnual != null ? Number(args.rateAnnual) : undefined,
+    });
+    return {
+      result: { ...result, asOf },
+      citation: { tool: 'project_runway', source: 'Carteira do usuário', asOf },
+    };
+  }
+
+  private async projectIncome(
+    tenantId: string,
+    args: Record<string, unknown>,
+  ): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    let principal = args.principal != null ? Number(args.principal) : 0;
+    if (args.principal == null) {
+      const portfolio = await this.portfolios.getDefaultPortfolio(tenantId);
+      if (portfolio) {
+        const summary = await this.portfolios.summary(tenantId, portfolio.id);
+        principal = summary.totalValue;
+      }
+    }
+    const result = this.analysis.project({
+      principal,
+      monthlyContribution: Number(args.monthlyContribution),
+      rateAnnual: Number(args.rateAnnual),
+      months: Math.max(1, Math.round(Number(args.months))),
+    });
+    return {
+      result: { ...result, asOf },
+      citation: { tool: 'project_income', source: 'Cálculo determinístico', asOf },
+    };
+  }
+
+  private async rebalance(
+    tenantId: string,
+    args: Record<string, unknown>,
+  ): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const target = (args.target || {}) as Record<string, number>;
+    const result = await this.analysis.rebalance(tenantId, { target });
+    return {
+      result: { ...result, asOf },
+      citation: { tool: 'check_rebalance', source: 'Carteira do usuário', asOf },
     };
   }
 

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiProviderModule } from '../ai-provider/ai-provider.module';
 import { FixedIncomeModule } from '../fixed-income/fixed-income.module';
 import { DocumentsModule } from '../documents/documents.module';
+import { AnalysisModule } from '../analysis/analysis.module';
 import { MarketModule } from '../market/market.module';
 import { PortfoliosModule } from '../portfolios/portfolios.module';
 import { AiController } from './ai.controller';
@@ -10,7 +11,7 @@ import { AiToolsService } from './ai-tools.service';
 import { AiUsageService } from './ai-usage.service';
 
 @Module({
-  imports: [AiProviderModule, PortfoliosModule, FixedIncomeModule, DocumentsModule, MarketModule],
+  imports: [AiProviderModule, PortfoliosModule, FixedIncomeModule, DocumentsModule, AnalysisModule, MarketModule],
   controllers: [AiController],
   providers: [AiService, AiToolsService, AiUsageService],
 })

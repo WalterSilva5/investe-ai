@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
 import { AdminComponent } from './pages/admin/admin.component';
 import { AlertsComponent } from './pages/alerts/alerts.component';
+import { AnalysisComponent } from './pages/analysis/analysis.component';
 import { ChatComponent } from './pages/chat/chat.component';
 import { FixedIncomeComponent } from './pages/fixed-income/fixed-income.component';
 import { LoginComponent } from './pages/login/login.component';
@@ -22,6 +23,7 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'overview' },
       { path: 'overview', component: OverviewComponent },
       { path: 'portfolio', component: PortfolioComponent },
+      { path: 'analysis', component: AnalysisComponent },
       { path: 'fixed-income', component: FixedIncomeComponent },
       { path: 'alerts', component: AlertsComponent },
       { path: 'admin', component: AdminComponent },

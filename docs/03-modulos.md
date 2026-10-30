@@ -85,9 +85,9 @@
 | `scheduler` | ✅ cron de cotações + alertas (dias úteis 18h) |
 | `fixed-income` | ✅ simulação e comparação (IR/isenção) |
 | `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
-| `ai` | ✅ chat com tools (carteira/macro/renda fixa/notas), citações, quota mensal, histórico, uso e auditoria |
+| `ai` | ✅ chat com tools (carteira/macro/renda fixa/notas/runway/projeção/rebalance), citações, quota mensal, histórico, uso e auditoria |
 | `audit` | 🟡 gravação de eventos de IA; tela depois |
-| `analysis` | 🟡 resumo/runway no serviço de carteira; módulo dedicado depois |
+| `analysis` | ✅ runway, projeção e rebalanceamento |
 | `alerts` | ✅ CRUD + avaliação (alocação máxima e macro) |
 | `reports` | ✅ Relatório da carteira em CSV e PDF |
 | `import` | ✅ CSV de transações (validação + recálculo de posição) |
