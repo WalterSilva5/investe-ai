@@ -16,6 +16,7 @@ import { AuthService } from '../../core/auth.service';
         <a routerLink="/app/alerts" routerLinkActive="active">Alertas</a>
         <a routerLink="/app/chat" routerLinkActive="active">Chat / análise</a>
         <a routerLink="/app/notes" routerLinkActive="active">Notas</a>
+        <a routerLink="/app/security" routerLinkActive="active">Segurança</a>
         <a routerLink="/app/admin" routerLinkActive="active">Admin</a>
         <a routerLink="/app/settings" routerLinkActive="active">Provedores de IA</a>
         <div class="spacer"></div>

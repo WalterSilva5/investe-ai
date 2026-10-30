@@ -67,12 +67,15 @@ model User {
   name           String?
   googleId       String?   @unique
   emailVerifiedAt DateTime?
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean   @default(false)
   status         String    @default("active")
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   memberships   Membership[]
   refreshTokens RefreshToken[]
+  tokens        Token[]
   conversations Conversation[]
   audits        AuditEvent[]
   usages        AiUsage[]
@@ -421,4 +424,18 @@ model Document {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
+}
+
+model Token {
+  id         String    @id @default(cuid())
+  userId     String
+  type       String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
 }

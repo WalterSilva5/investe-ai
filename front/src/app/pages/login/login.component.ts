@@ -1,11 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-login',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   template: `
     <div class="auth-page">
       <div class="auth-card">
@@ -46,6 +46,12 @@ import { AuthService } from '../../core/auth.service';
             {{ mode() === 'login' ? 'Criar agora' : 'Entrar' }}
           </a>
         </p>
+
+        @if (mode() === 'login') {
+          <p class="small muted" style="text-align:center;margin-top:8px">
+            <a routerLink="/forgot">Esqueci a senha?</a>
+          </p>
+        }
 
         <p class="small muted" style="margin-top:18px">
           Ferramenta educacional e analítica. Não é recomendação de investimento.

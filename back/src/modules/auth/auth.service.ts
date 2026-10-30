@@ -1,12 +1,14 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as argon2 from 'argon2';
+import { generateSecret, generateURI, verify } from 'otplib';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -18,6 +20,8 @@ export interface TokenPair {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -59,6 +63,15 @@ export class AuthService {
     const ok = await argon2.verify(user.passwordHash, dto.password);
     if (!ok) throw new UnauthorizedException('Credenciais inválidas.');
 
+    if (user.twoFactorEnabled) {
+      const valid = dto.twoFactorCode
+        ? await verify({ token: dto.twoFactorCode, secret: user.twoFactorSecret || '' })
+        : false;
+      if (!valid) {
+        throw new UnauthorizedException('Código 2FA inválido ou ausente.');
+      }
+    }
+
     const tokens = await this.issueTokens(user.id, user.email);
     return { user: this.publicUser(user), ...tokens };
   }
@@ -99,7 +112,11 @@ export class AuthService {
       },
     });
     if (!user) throw new UnauthorizedException('Usuário não encontrado.');
-    return { ...this.publicUser(user), memberships: user.memberships };
+    return {
+      ...this.publicUser(user),
+      twoFactorEnabled: user.twoFactorEnabled,
+      memberships: user.memberships,
+    };
   }
 
   async logout(refreshToken: string) {
@@ -108,6 +125,111 @@ export class AuthService {
       where: { tokenHash: hash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    return { ok: true };
+  }
+
+  async setup2FA(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('Usuário não encontrado.');
+    const secret = generateSecret();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: secret },
+    });
+    return {
+      secret,
+      otpauthUrl: generateURI({ secret, label: user.email, issuer: 'wsi-invest-ai' }),
+    };
+  }
+
+  async confirm2FA(userId: string, code: string) {
+    if (!/^\d{6}$/.test(code || '')) {
+      throw new UnauthorizedException('Código 2FA inválido.');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.twoFactorSecret) throw new UnauthorizedException('2FA não iniciado.');
+    if (!(await verify({ token: code, secret: user.twoFactorSecret }))) {
+      throw new UnauthorizedException('Código 2FA inválido.');
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: true },
+    });
+    return { ok: true };
+  }
+
+  async disable2FA(userId: string, code: string) {
+    if (!/^\d{6}$/.test(code || '')) {
+      throw new UnauthorizedException('Código 2FA inválido.');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.twoFactorSecret) throw new UnauthorizedException('2FA não está ativo.');
+    if (!(await verify({ token: code, secret: user.twoFactorSecret }))) {
+      throw new UnauthorizedException('Código 2FA inválido.');
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: false, twoFactorSecret: null },
+    });
+    return { ok: true };
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.passwordHash) throw new UnauthorizedException('Usuário não encontrado.');
+    const ok = await argon2.verify(user.passwordHash, oldPassword);
+    if (!ok) throw new UnauthorizedException('Senha atual incorreta.');
+    const passwordHash = await argon2.hash(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  async requestPasswordReset(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+    if (user) {
+      const raw = randomBytes(32).toString('hex');
+      await this.prisma.token.create({
+        data: {
+          userId: user.id,
+          type: 'RESET_PASSWORD',
+          tokenHash: this.hash(raw),
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+      });
+      const link = `${this.config.get('FRONTEND_URL') || 'http://localhost:4200'}/reset?token=${raw}`;
+      this.logger.log(`Reset de senha (${user.email}): ${link}`);
+    }
+    return { ok: true };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const hash = this.hash(token);
+    const stored = await this.prisma.token.findUnique({ where: { tokenHash: hash } });
+    if (
+      !stored ||
+      stored.consumedAt ||
+      stored.expiresAt < new Date() ||
+      stored.type !== 'RESET_PASSWORD'
+    ) {
+      throw new UnauthorizedException('Token inválido ou expirado.');
+    }
+    const passwordHash = await argon2.hash(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: stored.userId }, data: { passwordHash } }),
+      this.prisma.token.update({ where: { id: stored.id }, data: { consumedAt: new Date() } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: stored.userId },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
     return { ok: true };
   }
 

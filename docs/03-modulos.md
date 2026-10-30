@@ -94,5 +94,5 @@
 | `documents` | ✅ Notas + busca textual + tool `search_documents` |
 | `admin` | ✅ Visão geral, usuários e uso de IA (ADMIN_EMAILS) |
 | `backup` | ✅ `scripts/backup.sh` e `scripts/restore.sh` |
-| `security` | ✅ Helmet, rate limit global/auth, CORS configurável |
+| `security` | ✅ Helmet, rate limit, CORS, 2FA (TOTP), troca e reset de senha |
 
