@@ -13,6 +13,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
+  steps?: Array<{ tool: string; status: string; durationMs: number }>;
 }
 
 interface ChatResponse {
@@ -21,6 +22,7 @@ interface ChatResponse {
   providerId: string;
   model: string;
   citations: Citation[];
+  steps: Array<{ tool: string; status: string; durationMs: number }>;
   usage: { tokensIn: number; tokensOut: number };
   disclaimer: string;
 }
@@ -67,6 +69,11 @@ interface ConversationSummary {
           <div class="msg" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
             <div class="who">{{ message.role === 'user' ? 'Você' : 'Agente' }}</div>
             {{ message.content }}
+            @if (message.steps?.length) {
+              <div class="small muted" style="margin-top:8px">
+                Consultou: @for (step of message.steps; track $index) { {{ step.tool }}{{ $last ? '' : ' · ' }} }
+              </div>
+            }
             @if (message.citations?.length) {
               <div class="small muted" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
                 Fontes:
@@ -170,7 +177,7 @@ export class ChatComponent {
           this.conversationId = res.conversationId;
           this.messages.update((items) => [
             ...items,
-            { role: 'assistant', content: res.content, citations: res.citations },
+            { role: 'assistant', content: res.content, citations: res.citations, steps: res.steps },
           ]);
           this.loading.set(false);
           this.loadConversations();

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FixedIncomeService } from '../fixed-income/fixed-income.service';
 import { DocumentsService } from '../documents/documents.service';
+import { MemoriesService } from '../memories/memories.service';
 import { AnalysisService } from '../analysis/analysis.service';
 import { MacroService } from '../market/macro.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
@@ -24,6 +25,7 @@ export class AiToolsService {
     private readonly fixedIncome: FixedIncomeService,
     private readonly macroService: MacroService,
     private readonly documents: DocumentsService,
+    private readonly memories: MemoriesService,
     private readonly analysis: AnalysisService,
   ) {}
 
@@ -69,6 +71,41 @@ export class AiToolsService {
           name: 'search_documents',
           description:
             'Busca nas notas/documentos do usuário por palavras-chave. Use para recuperar decisões, planos e anotações.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Termo de busca' },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'remember',
+          description:
+            'Grava uma memória duradoura (fato, decisão, preferência, procedimento) para usar em conversas futuras.',
+          parameters: {
+            type: 'object',
+            properties: {
+              content: { type: 'string' },
+              kind: {
+                type: 'string',
+                enum: ['fact', 'decision', 'preference', 'episode', 'procedure', 'context'],
+              },
+              tags: { type: 'string' },
+              importance: { type: 'integer' },
+            },
+            required: ['content'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'search_memory',
+          description: 'Busca nas memórias do agente por palavras-chave.',
           parameters: {
             type: 'object',
             properties: {
@@ -179,6 +216,10 @@ export class AiToolsService {
           return await this.macro();
         case 'search_documents':
           return await this.searchDocuments(tenantId, String(args.query || ''));
+        case 'remember':
+          return await this.remember(tenantId, args);
+        case 'search_memory':
+          return await this.searchMemory(tenantId, String(args.query || ''));
         case 'project_runway':
           return await this.runway(tenantId, args);
         case 'project_income':
@@ -268,6 +309,42 @@ export class AiToolsService {
         source: 'Notas do usuário',
         asOf,
       },
+    };
+  }
+
+  private async remember(
+    tenantId: string,
+    args: Record<string, unknown>,
+  ): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const memory = await this.memories.create(tenantId, {
+      content: String(args.content || ''),
+      kind: typeof args.kind === 'string' ? args.kind : undefined,
+      tags: typeof args.tags === 'string' ? args.tags : undefined,
+      importance: args.importance != null ? Number(args.importance) : undefined,
+    });
+    return {
+      result: { memory: { id: memory.id, kind: memory.kind, content: memory.content }, asOf },
+      citation: { tool: 'remember', source: 'Memória do agente', asOf },
+    };
+  }
+
+  private async searchMemory(
+    tenantId: string,
+    query: string,
+  ): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const memories = await this.memories.search(tenantId, query);
+    return {
+      result: {
+        memories: memories.map((memory) => ({
+          kind: memory.kind,
+          content: memory.content,
+          tags: memory.tags,
+        })),
+        asOf,
+      },
+      citation: { tool: 'search_memory', source: 'Memória do agente', asOf },
     };
   }
 

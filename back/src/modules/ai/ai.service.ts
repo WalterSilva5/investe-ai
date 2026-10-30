@@ -10,6 +10,7 @@ import {
   OpenAICompatibleProvider,
 } from '../ai-provider/openai-compatible.provider';
 import { PortfoliosService } from '../portfolios/portfolios.service';
+import { MemoriesService } from '../memories/memories.service';
 import { AiToolsService, ToolCitation } from './ai-tools.service';
 import { AiUsageService } from './ai-usage.service';
 import { ChatDto } from './dto/chat.dto';
@@ -51,6 +52,7 @@ export class AiService {
     private readonly portfolios: PortfoliosService,
     private readonly tools: AiToolsService,
     private readonly usage: AiUsageService,
+    private readonly memories: MemoriesService,
   ) {}
 
   async chat(tenantId: string, userId: string, dto: ChatDto) {
@@ -91,6 +93,12 @@ export class AiService {
         content: `Contexto resumido da carteira (${new Date().toISOString()}): ${JSON.stringify(
           await this.portfolios.aiContext(tenantId),
         )}. Para detalhes, use as ferramentas.`,
+      },
+      {
+        role: 'system',
+        content: `Memórias relevantes do agente (${new Date().toISOString()}): ${JSON.stringify(
+          await this.memories.top(tenantId),
+        )}. Use a ferramenta search_memory para mais.`,
       },
       ...conversation.messages.map((m) => ({
         role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
@@ -174,6 +182,11 @@ export class AiService {
       model: generation.model,
       content: generation.content,
       citations: generation.citations,
+      steps: generation.toolLogs.map((log) => ({
+        tool: log.tool,
+        status: log.status,
+        durationMs: log.durationMs,
+      })),
       usage: { tokensIn: generation.tokensIn, tokensOut: generation.tokensOut },
       disclaimer:
         'Conteúdo educacional e analítico. Não é recomendação de investimento.',

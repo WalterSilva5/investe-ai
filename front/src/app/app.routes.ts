@@ -8,6 +8,7 @@ import { FixedIncomeComponent } from './pages/fixed-income/fixed-income.componen
 import { LoginComponent } from './pages/login/login.component';
 import { ForgotPasswordComponent } from './pages/forgot-password/forgot-password.component';
 import { SecurityComponent } from './pages/security/security.component';
+import { MemoriesComponent } from './pages/memories/memories.component';
 import { NotesComponent } from './pages/notes/notes.component';
 import { OverviewComponent } from './pages/overview/overview.component';
 import { PortfolioComponent } from './pages/portfolio/portfolio.component';
@@ -33,6 +34,7 @@ export const routes: Routes = [
       { path: 'admin', component: AdminComponent },
       { path: 'chat', component: ChatComponent },
       { path: 'notes', component: NotesComponent },
+      { path: 'memories', component: MemoriesComponent },
       { path: 'security', component: SecurityComponent },
       { path: 'settings', component: SettingsComponent },
     ],

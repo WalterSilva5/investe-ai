@@ -85,13 +85,14 @@
 | `scheduler` | ✅ cron de cotações + alertas (dias úteis 18h) |
 | `fixed-income` | ✅ simulação e comparação (IR/isenção) |
 | `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
-| `ai` | ✅ chat com tools (carteira/macro/renda fixa/notas/runway/projeção/rebalance), citações, quota mensal, histórico, uso e auditoria |
+| `ai` | ✅ chat com tools (carteira/macro/renda fixa/notas/memória/runway/projeção/rebalance), citações, passos, quota mensal, histórico, uso e auditoria |
 | `audit` | 🟡 gravação de eventos de IA; tela depois |
 | `analysis` | ✅ runway, projeção e rebalanceamento |
 | `alerts` | ✅ CRUD + avaliação (alocação máxima e macro) |
 | `reports` | ✅ Relatório da carteira em CSV e PDF |
 | `import` | ✅ CSV de transações (validação + recálculo de posição) |
 | `documents` | ✅ Notas + busca textual + tool `search_documents` |
+| `memories` | ✅ Memória do agente + tools `remember`/`search_memory` |
 | `admin` | ✅ Visão geral, usuários e uso de IA (ADMIN_EMAILS) |
 | `backup` | ✅ `scripts/backup.sh` e `scripts/restore.sh` |
 | `security` | ✅ Helmet, rate limit, CORS, 2FA (TOTP), troca e reset de senha |

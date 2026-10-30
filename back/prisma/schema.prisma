@@ -58,6 +58,7 @@ model Tenant {
   usages       AiUsage[]
   imports      ImportJob[]
   documents    Document[]
+  memories     Memory[]
 }
 
 model User {
@@ -438,4 +439,20 @@ model Token {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type])
+}
+
+model Memory {
+  id         String   @id @default(cuid())
+  tenantId   String
+  kind       String   @default("fact")
+  content    String
+  tags       String?
+  importance Int      @default(5)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, kind])
+  @@index([tenantId, createdAt])
 }
