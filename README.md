@@ -73,6 +73,8 @@ Fundação + carteira + renda fixa + macro + alertas + importação/relatório +
 - Cotações B3/cripto com atualização manual e agendada (dias úteis, 18h).
 - IA: registry multi-provedor, OpenCode padrão, chaves criptografadas, chat com **tools determinísticas** (carteira, macro, renda fixa), citações, **quota mensal**, uso e auditoria.
 - **Testes de isolamento multi-tenant** cobrindo carteira, resumo e transações.
+- **Admin** (ADMIN_EMAILS) com visão geral, usuários e uso de IA.
+- **Hardening:** Helmet, rate limit global e no login/registro, CORS configurável.
 - Frontend: login, visão geral, carteira, renda fixa, alertas, chat e configuração de provedores.
 
-Próximo: RAG, admin/uso e hardening para usuários externos.
+Próximo: RAG e preparação para usuários externos (túnel/TLS, backup automatizado).

@@ -91,5 +91,6 @@
 | `alerts` | ✅ CRUD + avaliação (alocação máxima e macro) |
 | `reports` | ✅ Relatório da carteira em CSV e PDF |
 | `import` | ✅ CSV de transações (validação + recálculo de posição) |
-| `admin` | ⏳ |
+| `admin` | ✅ Visão geral, usuários e uso de IA (ADMIN_EMAILS) |
+| `security` | ✅ Helmet, rate limit global/auth, CORS configurável |
 
