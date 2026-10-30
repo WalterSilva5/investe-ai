@@ -5,6 +5,7 @@ import { AlertsComponent } from './pages/alerts/alerts.component';
 import { ChatComponent } from './pages/chat/chat.component';
 import { FixedIncomeComponent } from './pages/fixed-income/fixed-income.component';
 import { LoginComponent } from './pages/login/login.component';
+import { NotesComponent } from './pages/notes/notes.component';
 import { OverviewComponent } from './pages/overview/overview.component';
 import { PortfolioComponent } from './pages/portfolio/portfolio.component';
 import { SettingsComponent } from './pages/settings/settings.component';
@@ -25,6 +26,7 @@ export const routes: Routes = [
       { path: 'alerts', component: AlertsComponent },
       { path: 'admin', component: AdminComponent },
       { path: 'chat', component: ChatComponent },
+      { path: 'notes', component: NotesComponent },
       { path: 'settings', component: SettingsComponent },
     ],
   },

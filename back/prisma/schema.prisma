@@ -57,6 +57,7 @@ model Tenant {
   alerts       AlertRule[]
   usages       AiUsage[]
   imports      ImportJob[]
+  documents    Document[]
 }
 
 model User {
@@ -400,6 +401,20 @@ model ImportJob {
   status    String   @default("PENDING")
   filename  String?
   result    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  tenantId  String
+  title     String
+  body      String
+  tags      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { FixedIncomeService } from '../fixed-income/fixed-income.service';
+import { DocumentsService } from '../documents/documents.service';
 import { MacroService } from '../market/macro.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
 import { ToolDefinition } from '../ai-provider/openai-compatible.provider';
@@ -21,6 +22,7 @@ export class AiToolsService {
     private readonly portfolios: PortfoliosService,
     private readonly fixedIncome: FixedIncomeService,
     private readonly macroService: MacroService,
+    private readonly documents: DocumentsService,
   ) {}
 
   definitions(): ToolDefinition[] {
@@ -57,6 +59,21 @@ export class AiToolsService {
           name: 'get_macro',
           description: 'Selic, IPCA e CDI atuais, com fonte e data (BCB).',
           parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'search_documents',
+          description:
+            'Busca nas notas/documentos do usuário por palavras-chave. Use para recuperar decisões, planos e anotações.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Termo de busca' },
+            },
+            required: ['query'],
+          },
         },
       },
       {
@@ -105,6 +122,8 @@ export class AiToolsService {
           return await this.allocation(tenantId);
         case 'get_macro':
           return await this.macro();
+        case 'search_documents':
+          return await this.searchDocuments(tenantId, String(args.query || ''));
         case 'simulate_fixed_income':
           return this.simulate(args);
         default:
@@ -167,6 +186,26 @@ export class AiToolsService {
         tool: 'get_macro',
         source: String(data.source || 'BCB'),
         asOf: String(data.fetchedAt || new Date().toISOString()),
+      },
+    };
+  }
+
+  private async searchDocuments(tenantId: string, query: string): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const documents = await this.documents.search(tenantId, query);
+    return {
+      result: {
+        documents: documents.map((doc) => ({
+          title: doc.title,
+          tags: doc.tags,
+          body: doc.body.slice(0, 2000),
+        })),
+        asOf,
+      },
+      citation: {
+        tool: 'search_documents',
+        source: 'Notas do usuário',
+        asOf,
       },
     };
   }

@@ -85,6 +85,18 @@ OPENCODE_BASE_URL=https://opencode.ai/zen/go/v1
 AI_ENCRYPTION_KEY=
 ```
 
+## Backup e restauração
+
+```bash
+# backup (mantém 7 dias)
+./scripts/backup.sh
+
+# restaurar
+./scripts/restore.sh backups/wsi_invest_YYYYmmdd_HHMMSS.sql.gz
+```
+
+Variáveis: `PG_CONTAINER`, `PG_USER`, `PG_DB`, `BACKUP_DIR`.
+
 ## Solução de problemas
 
 | Sintoma | Causa | Correção |

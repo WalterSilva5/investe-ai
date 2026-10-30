@@ -8,3 +8,6 @@ coverage/
 .angular/
 .DS_Store
 back/prisma/*.db
+
+# Backups locais
+backups/
