@@ -29,6 +29,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 - **Tools determinísticas** (carteira, macro, renda fixa, notas, memória, análise) com **citação de fonte e data**.
 - **Streaming (SSE)** token a token, com fallback.
 - **Memória do agente** (`remember`/`search_memory`) e **notas** (`search_documents`).
+- **Insights periódicos**: dicas geradas por IA a partir de **notícias (RSS)** + **indicadores (Selic/IPCA/CDI)** + **carteira**, com cron diário, fontes e disclaimer.
 - Quota mensal, histórico de conversas, passos visíveis e auditoria.
 
 ## Stack

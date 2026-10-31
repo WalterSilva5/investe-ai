@@ -59,6 +59,7 @@ model Tenant {
   imports      ImportJob[]
   documents    Document[]
   memories     Memory[]
+  insights     Insight[]
 }
 
 model User {
@@ -455,4 +456,21 @@ model Memory {
 
   @@index([tenantId, kind])
   @@index([tenantId, createdAt])
+}
+
+model Insight {
+  id          String   @id @default(cuid())
+  tenantId    String
+  category    String   @default("GERAL")
+  title       String
+  content     String
+  sources     Json?
+  providerId  String?
+  model       String?
+  isRead      Boolean  @default(false)
+  generatedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, generatedAt])
 }

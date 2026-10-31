@@ -23,6 +23,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
 import { AiModule } from './modules/ai/ai.module';
+import { InsightsModule } from './modules/insights/insights.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AiModule } from './modules/ai/ai.module';
     AdminModule,
     AiProviderModule,
     AiModule,
+    InsightsModule,
   ],
   providers: [
     {

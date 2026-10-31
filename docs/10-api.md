@@ -124,6 +124,14 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/ai/conversations` | Histórico de conversas |
 | GET | `/ai/conversations/:id` | Mensagens de uma conversa |
 
+## Insights de IA (`/insights`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/insights` | Lista os insights gerados (últimos 30) |
+| POST | `/insights/refresh` | Gera novos insights (notícias + macro + carteira) |
+| PATCH | `/insights/:id/read` | Marca um insight como lido |
+
 ## Admin (`/admin`)
 
 | Método | Rota | Descrição |

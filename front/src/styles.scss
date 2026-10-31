@@ -158,6 +158,25 @@ a:hover { text-decoration: underline; }
 .disclaimer { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.insights-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.insights-head h2 { margin: 0 0 4px; }
+.insight {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.insight-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.insight-title { font-weight: 700; }
+.insight-body { white-space: pre-wrap; }
+.insight-sources { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.insight-sources a { font-size: 12.5px; }
+.badge.cat-macro { background: #eef4ff; color: #1f6feb; }
+.badge.cat-renda_fixa { background: #ecfdf3; color: #0f7b4f; }
+.badge.cat-acoes { background: #fef3f2; color: #b42318; }
+.badge.cat-cripto { background: #fef9ec; color: #b54708; }
+.badge.cat-carteira { background: #f4f0ff; color: #53389e; }
+.badge.cat-geral { background: #f2f4f7; color: #667085; }
+
 @media (max-width: 820px) {
   .layout { grid-template-columns: 1fr; }
   .sidebar { flex-direction: row; flex-wrap: wrap; align-items: center; }
