@@ -2,6 +2,7 @@ import { SlicePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
+import { API_BASE_URL } from '../../core/api.config';
 
 interface Citation {
   tool: string;
@@ -167,27 +168,106 @@ export class ChatComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    this.api
-      .post<ChatResponse>('/ai/chat', {
-        message: content,
-        conversationId: this.conversationId,
-      })
-      .subscribe({
-        next: (res) => {
-          this.conversationId = res.conversationId;
-          this.messages.update((items) => [
-            ...items,
-            { role: 'assistant', content: res.content, citations: res.citations, steps: res.steps },
-          ]);
-          this.loading.set(false);
-          this.loadConversations();
-        },
-        error: (err) => {
-          this.error.set(
-            err?.error?.message || 'Falha ao consultar o agente. Verifique o provedor configurado.',
-          );
-          this.loading.set(false);
-        },
+    this.streamSend(content).catch(() => {
+      // fallback não-streaming
+      this.api
+        .post<ChatResponse>('/ai/chat', { message: content, conversationId: this.conversationId })
+        .subscribe({
+          next: (res) => this.applyResponse(res),
+          error: (err) => this.failChat(err),
+        });
+    });
+  }
+
+  private applyResponse(res: ChatResponse) {
+    this.conversationId = res.conversationId;
+    this.messages.update((items) => [
+      ...items,
+      { role: 'assistant', content: res.content, citations: res.citations, steps: res.steps },
+    ]);
+    this.loading.set(false);
+    this.loadConversations();
+  }
+
+  private failChat(err: any) {
+    this.error.set(err?.error?.message || 'Falha ao consultar o agente. Verifique o provedor configurado.');
+    this.loading.set(false);
+  }
+
+  private async streamSend(content: string): Promise<void> {
+    const token = localStorage.getItem('wsi.accessToken');
+    const tenantId = localStorage.getItem('wsi.tenantId');
+    const response = await fetch(`${API_BASE_URL}/ai/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId || '',
+      },
+      body: JSON.stringify({ message: content, conversationId: this.conversationId }),
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error('stream indisponível');
+    }
+
+    let assistantIndex = -1;
+    this.messages.update((items) => {
+      assistantIndex = items.length;
+      return [...items, { role: 'assistant', content: '' }];
+    });
+
+    let citations: Citation[] = [];
+    let steps: Array<{ tool: string; status: string; durationMs: number }> = [];
+    let full = '';
+
+    const setAssistant = (value: string) => {
+      this.messages.update((items) => {
+        const next = items.slice();
+        next[assistantIndex] = { role: 'assistant', content: value, citations, steps };
+        return next;
       });
+    };
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf('\n\n')) >= 0) {
+        const raw = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 2);
+        if (!raw.startsWith('data:')) continue;
+        const data = raw.slice(5).trim();
+        if (!data) continue;
+        const event = JSON.parse(data) as {
+          type: string;
+          conversationId?: string;
+          citations?: Citation[];
+          steps?: Array<{ tool: string; status: string; durationMs: number }>;
+          content?: string;
+          message?: string;
+        };
+        if (event.type === 'meta') {
+          this.conversationId = event.conversationId || null;
+          citations = event.citations || [];
+          steps = event.steps || [];
+        } else if (event.type === 'delta') {
+          full += event.content || '';
+          setAssistant(full);
+        } else if (event.type === 'done') {
+          this.loadConversations();
+        } else if (event.type === 'error') {
+          this.error.set(event.message || 'Falha no agente.');
+        }
+      }
+    }
+
+    setAssistant(full);
+    this.loading.set(false);
   }
 }

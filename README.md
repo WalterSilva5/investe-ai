@@ -77,6 +77,7 @@ Fundação + carteira + renda fixa + macro + alertas + importação/relatório +
 - **Admin** (ADMIN_EMAILS) com visão geral, usuários e uso de IA.
 - **Notas** com busca textual e tool `search_documents` para o agente (RAG-lite).
 - **Memória do agente** (fatos/decisões/preferências) com tools `remember` e `search_memory`; passos visíveis no chat.
+- **Streaming (SSE)** no chat: resposta token a token (`POST /ai/chat/stream`), com fallback não-streaming.
 - **Backup/restore** via `scripts/backup.sh` e `scripts/restore.sh`.
 - **Hardening:** Helmet, rate limit global e no login/registro, CORS configurável, **2FA (TOTP)** e **troca/reset de senha**.
 - Frontend: login, visão geral, carteira, renda fixa, alertas, chat e configuração de provedores.

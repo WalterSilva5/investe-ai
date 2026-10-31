@@ -4,9 +4,11 @@ import {
   Get,
   Param,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -34,6 +36,30 @@ export class AiController {
     @Body() dto: ChatDto,
   ) {
     return this.ai.chat(tenantId, user.userId, dto);
+  }
+
+  @Post('chat/stream')
+  async chatStream(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: { userId: string },
+    @Body() dto: ChatDto,
+    @Res() response: Response,
+  ) {
+    response.set({
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    try {
+      for await (const event of this.ai.streamChat(tenantId, user.userId, dto)) {
+        response.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    } catch (error) {
+      response.write(
+        `data: ${JSON.stringify({ type: 'error', message: (error as Error).message })}\n\n`,
+      );
+    }
+    response.end();
   }
 
   @Get('usage')

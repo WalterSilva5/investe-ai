@@ -96,6 +96,29 @@ export class OpenAICompatibleProvider {
     };
   }
 
+  async *streamChat(
+    messages: ChatMessage[],
+    options: ChatOptions = {},
+  ): AsyncGenerator<{ delta: string; model: string }> {
+    const model = options.model || this.config.defaultModel;
+    if (!model) {
+      throw new Error('Nenhum modelo definido para este provedor.');
+    }
+    const stream = await this.client.chat.completions.create({
+      model,
+      messages: messages as never,
+      temperature: options.temperature ?? 0.3,
+      max_tokens: options.maxTokens,
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) {
+        yield { delta, model: chunk.model || model };
+      }
+    }
+  }
+
   async listModels(): Promise<string[]> {
     const list = await this.client.models.list();
     return list.data.map((m) => m.id).sort();

@@ -107,7 +107,7 @@ export class AiService {
       { role: 'user', content: dto.message },
     ];
 
-    const generation = await this.generate(
+    const generation = await this.finalize(
       resolved.provider,
       resolved.model,
       baseMessages,
@@ -193,6 +193,209 @@ export class AiService {
     };
   }
 
+  private async finalize(
+    provider: OpenAICompatibleProvider,
+    model: string,
+    baseMessages: ChatMessage[],
+    temperature: number | undefined,
+    tenantId: string,
+  ): Promise<Generation> {
+    try {
+      const tools = await this.resolveTools(provider, model, baseMessages, temperature, tenantId);
+      const finalResult = await provider.chat(tools.messages, { model, temperature });
+      return {
+        content: finalResult.content,
+        model: finalResult.model,
+        tokensIn: tools.tokensIn + finalResult.tokensIn,
+        tokensOut: tools.tokensOut + finalResult.tokensOut,
+        citations: tools.citations,
+        toolLogs: tools.toolLogs,
+      };
+    } catch {
+      const result = await provider.chat(baseMessages, { model, temperature });
+      return {
+        content: result.content,
+        model: result.model,
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
+        citations: [],
+        toolLogs: [],
+      };
+    }
+  }
+
+  async *streamChat(
+    tenantId: string,
+    userId: string,
+    dto: ChatDto,
+  ): AsyncGenerator<Record<string, unknown>> {
+    await this.usage.assertQuota(userId, tenantId);
+    const resolved = await this.registry.resolve(tenantId, dto.providerId, dto.model);
+
+    let conversation = dto.conversationId
+      ? await this.prisma.conversation.findUnique({
+          where: { id: dto.conversationId },
+          include: { messages: { orderBy: { createdAt: 'asc' }, take: 20 } },
+        })
+      : null;
+
+    if (dto.conversationId && !conversation) {
+      throw new NotFoundException('Conversa não encontrada.');
+    }
+    if (conversation && conversation.tenantId !== tenantId) {
+      throw new ForbiddenException('Conversa de outro tenant.');
+    }
+    if (!conversation) {
+      conversation = await this.prisma.conversation.create({
+        data: {
+          tenantId,
+          userId,
+          title: dto.message.slice(0, 60),
+          providerId: resolved.providerId,
+          model: resolved.model,
+        },
+        include: { messages: true },
+      });
+    }
+
+    const baseMessages: ChatMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'system',
+        content: `Contexto resumido da carteira (${new Date().toISOString()}): ${JSON.stringify(
+          await this.portfolios.aiContext(tenantId),
+        )}. Para detalhes, use as ferramentas.`,
+      },
+      {
+        role: 'system',
+        content: `Memórias relevantes do agente (${new Date().toISOString()}): ${JSON.stringify(
+          await this.memories.top(tenantId),
+        )}. Use a ferramenta search_memory para mais.`,
+      },
+      ...conversation.messages.map((m) => ({
+        role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
+        content: m.content,
+      })),
+      { role: 'user', content: dto.message },
+    ];
+
+    let resolvedTools: {
+      messages: ChatMessage[];
+      citations: ToolCitation[];
+      toolLogs: ToolLog[];
+      tokensIn: number;
+      tokensOut: number;
+      model: string;
+    };
+    try {
+      resolvedTools = await this.resolveTools(
+        resolved.provider,
+        resolved.model,
+        baseMessages,
+        dto.temperature,
+        tenantId,
+      );
+    } catch {
+      resolvedTools = {
+        messages: baseMessages,
+        citations: [],
+        toolLogs: [],
+        tokensIn: 0,
+        tokensOut: 0,
+        model: resolved.model,
+      };
+    }
+
+    yield {
+      type: 'meta',
+      conversationId: conversation.id,
+      providerId: resolved.providerId,
+      model: resolvedTools.model,
+      citations: resolvedTools.citations,
+      steps: resolvedTools.toolLogs.map((log) => ({
+        tool: log.tool,
+        status: log.status,
+        durationMs: log.durationMs,
+      })),
+    };
+
+    let content = '';
+    for await (const chunk of resolved.provider.streamChat(resolvedTools.messages, {
+      model: resolvedTools.model,
+      temperature: dto.temperature,
+    })) {
+      content += chunk.delta;
+      yield { type: 'delta', content: chunk.delta };
+    }
+
+    await this.persist(
+      tenantId,
+      userId,
+      conversation.id,
+      dto.message,
+      content,
+      resolvedTools.citations,
+      resolvedTools.toolLogs,
+      resolved.providerId,
+      resolvedTools.model,
+    );
+    yield { type: 'done' };
+  }
+
+  private async persist(
+    tenantId: string,
+    userId: string,
+    conversationId: string,
+    userContent: string,
+    assistantContent: string,
+    citations: ToolCitation[],
+    toolLogs: ToolLog[],
+    providerId: string,
+    model: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.message.create({
+        data: { conversationId, role: 'USER', content: userContent },
+      });
+      await tx.message.create({
+        data: {
+          conversationId,
+          role: 'ASSISTANT',
+          content: assistantContent,
+          citations: citations as never,
+        },
+      });
+      await tx.conversation.update({ where: { id: conversationId }, data: { providerId, model } });
+      await tx.aiUsage.create({
+        data: { tenantId, userId, providerId, model, tokensIn: 0, tokensOut: 0, task: 'chat' },
+      });
+      if (toolLogs.length) {
+        await tx.toolCall.createMany({
+          data: toolLogs.map((log) => ({
+            tenantId,
+            userId,
+            conversationId,
+            tool: log.tool,
+            input: log.input as never,
+            output: log.output as never,
+            durationMs: log.durationMs,
+            status: log.status,
+          })),
+        });
+      }
+      await tx.auditEvent.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'ai.chat',
+          entity: 'conversation',
+          entityId: conversationId,
+          metadata: { providerId, model, tools: toolLogs.map((t) => t.tool) },
+        },
+      });
+    });
+  }
+
   listConversations(tenantId: string, userId: string) {
     return this.prisma.conversation.findMany({
       where: { tenantId, userId },
@@ -213,35 +416,20 @@ export class AiService {
     return conversation;
   }
 
-  private async generate(
-    provider: OpenAICompatibleProvider,
-    model: string,
-    messages: ChatMessage[],
-    temperature: number | undefined,
-    tenantId: string,
-  ): Promise<Generation> {
-    try {
-      return await this.generateWithTools(provider, model, messages, temperature, tenantId);
-    } catch {
-      const result = await provider.chat(messages, { model, temperature });
-      return {
-        content: result.content,
-        model: result.model,
-        tokensIn: result.tokensIn,
-        tokensOut: result.tokensOut,
-        citations: [],
-        toolLogs: [],
-      };
-    }
-  }
-
-  private async generateWithTools(
+  private async resolveTools(
     provider: OpenAICompatibleProvider,
     model: string,
     baseMessages: ChatMessage[],
     temperature: number | undefined,
     tenantId: string,
-  ): Promise<Generation> {
+  ): Promise<{
+    messages: ChatMessage[];
+    citations: ToolCitation[];
+    toolLogs: ToolLog[];
+    tokensIn: number;
+    tokensOut: number;
+    model: string;
+  }> {
     const messages = [...baseMessages];
     const tools = this.tools.definitions();
     const citations: ToolCitation[] = [];
@@ -249,7 +437,6 @@ export class AiService {
     let tokensIn = 0;
     let tokensOut = 0;
     let finalModel = model;
-    let content = '';
 
     for (let step = 0; step < 4; step += 1) {
       const result = await provider.chat(messages, {
@@ -262,7 +449,6 @@ export class AiService {
       finalModel = result.model;
 
       if (!result.toolCalls.length) {
-        content = result.content;
         break;
       }
 
@@ -305,18 +491,13 @@ export class AiService {
       }
     }
 
-    if (!content) {
-      content =
-        'Não consegui concluir a análise com os dados disponíveis. Tente reformular a pergunta.';
-    }
-
     return {
-      content,
-      model: finalModel,
-      tokensIn,
-      tokensOut,
+      messages,
       citations: this.dedupeCitations(citations),
       toolLogs,
+      tokensIn,
+      tokensOut,
+      model: finalModel,
     };
   }
 

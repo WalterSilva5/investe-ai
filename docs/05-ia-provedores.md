@@ -82,6 +82,8 @@ Regras:
 
 ## Agente e tools
 
+**Streaming:** `POST /api/ai/chat/stream` devolve SSE (`meta` → `delta`* → `done`), executando as tools antes e transmitindo a resposta final. Fallback automático para `POST /api/ai/chat` se o provedor não suportar streaming.
+
 **Tools implementadas (determinísticas):**
 - `get_portfolio_summary` — patrimônio, investido, resultado, alocação
 - `get_positions` — posições da carteira
