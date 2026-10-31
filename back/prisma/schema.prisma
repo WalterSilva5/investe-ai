@@ -14,6 +14,11 @@ enum Role {
   VIEWER
 }
 
+enum TenantKind {
+  PERSONAL
+  COMPANY
+}
+
 enum AssetType {
   STOCK
   FII
@@ -40,12 +45,14 @@ enum MessageRole {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   name      String
-  slug      String   @unique
-  plan      String   @default("free")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  slug      String     @unique
+  plan      String     @default("free")
+  kind      TenantKind @default(PERSONAL)
+  cnpj      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   memberships  Membership[]
   portfolios   Portfolio[]
@@ -60,6 +67,7 @@ model Tenant {
   documents    Document[]
   memories     Memory[]
   insights     Insight[]
+  statements   BankStatement[]
 }
 
 model User {
@@ -473,4 +481,36 @@ model Insight {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, generatedAt])
+}
+
+model BankStatement {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  institution String?
+  source      String   @default("OFX")
+  periodStart DateTime?
+  periodEnd   DateTime?
+  importedAt  DateTime @default(now())
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions BankTransaction[]
+
+  @@index([tenantId, importedAt])
+}
+
+model BankTransaction {
+  id          String   @id @default(cuid())
+  statementId String
+  date        DateTime
+  description String
+  amount      Decimal
+  type        String   @default("EXPENSE")
+  category    String?
+  balance     Decimal?
+  raw         String?
+
+  statement BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@index([statementId, date])
 }

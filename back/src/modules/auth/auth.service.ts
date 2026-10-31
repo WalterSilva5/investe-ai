@@ -107,7 +107,11 @@ export class AuthService {
       where: { id: userId },
       include: {
         memberships: {
-          include: { tenant: { select: { id: true, name: true, slug: true, plan: true } } },
+          include: {
+            tenant: {
+              select: { id: true, name: true, slug: true, plan: true, kind: true, cnpj: true },
+            },
+          },
         },
       },
     });

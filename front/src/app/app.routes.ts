@@ -3,6 +3,7 @@ import { authGuard } from './core/auth.guard';
 import { AdminComponent } from './pages/admin/admin.component';
 import { AlertsComponent } from './pages/alerts/alerts.component';
 import { AnalysisComponent } from './pages/analysis/analysis.component';
+import { BankingComponent } from './pages/banking/banking.component';
 import { ChatComponent } from './pages/chat/chat.component';
 import { FixedIncomeComponent } from './pages/fixed-income/fixed-income.component';
 import { InsightsComponent } from './pages/insights/insights.component';
@@ -30,6 +31,7 @@ export const routes: Routes = [
       { path: 'overview', component: OverviewComponent },
       { path: 'insights', component: InsightsComponent },
       { path: 'portfolio', component: PortfolioComponent },
+      { path: 'banking', component: BankingComponent },
       { path: 'analysis', component: AnalysisComponent },
       { path: 'fixed-income', component: FixedIncomeComponent },
       { path: 'alerts', component: AlertsComponent },

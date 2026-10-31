@@ -9,6 +9,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 ### Plataforma
 
 - **Multi-tenant** com papéis (`OWNER/ADMIN/MEMBER/VIEWER`) e isolamento testado.
+- **Empresas (PJ):** crie e vincule empresas à mesma conta; gerencie PF e PJ trocando de workspace (cada um com carteira e extratos próprios).
 - **Auth:** e-mail/senha (Argon2), Google OAuth, JWT + refresh rotativo, **2FA (TOTP)**, troca e reset de senha.
 - **Admin** (`ADMIN_EMAILS`): visão geral, usuários e uso de IA.
 - **Hardening:** Helmet, rate limit global e no login/registro, CORS configurável, chaves criptografadas.
@@ -22,6 +23,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 - **Câmbio e ouro:** USD/BRL, EUR/BRL, GBP/BRL (AwesomeAPI) e ouro (gold-api) com conversão para BRL.
 - **Análise:** runway, projeção de patrimônio e rebalanceamento.
 - **Alertas** de alocação e macro.
+- **Extratos bancários:** importação de **OFX/CSV** com entradas, saídas, saldo e resumo por mês.
 - **Importação CSV** e **relatórios CSV/PDF**.
 
 ### Agente de IA

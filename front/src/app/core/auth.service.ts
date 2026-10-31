@@ -12,7 +12,7 @@ export interface Membership {
   id: string;
   tenantId: string;
   role: string;
-  tenant: { id: string; name: string; slug: string; plan: string };
+  tenant: { id: string; name: string; slug: string; plan: string; kind?: string; cnpj?: string | null };
 }
 
 interface AuthResponse {
@@ -61,6 +61,17 @@ export class AuthService {
   selectTenant(tenantId: string) {
     localStorage.setItem('wsi.tenantId', tenantId);
     this.tenantId.set(tenantId);
+  }
+
+  refreshMemberships() {
+    this.api.get<Membership[]>('/tenants').subscribe({
+      next: (memberships) => {
+        this.memberships.set(memberships);
+        if (!localStorage.getItem('wsi.tenantId') && memberships.length) {
+          this.selectTenant(memberships[0].tenantId);
+        }
+      },
+    });
   }
 
   private applySession(res: AuthResponse) {

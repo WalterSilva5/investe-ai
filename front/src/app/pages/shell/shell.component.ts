@@ -1,15 +1,50 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { InsightsService } from '../../core/insights.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, FormsModule],
   template: `
     <div class="layout">
       <aside class="sidebar">
         <div class="logo">wsi<span>-invest-ai</span></div>
+
+        <div class="workspace">
+          <select
+            class="input"
+            style="background:#1d2939;color:#d0d5dd;border-color:#344054"
+            [value]="auth.tenantId() || ''"
+            (change)="onWorkspaceChange($event)"
+            title="Workspace ativo"
+          >
+            @for (member of auth.memberships(); track member.tenantId) {
+              <option [value]="member.tenantId">
+                {{ member.tenant.kind === 'COMPANY' ? '🏢' : '🏠' }} {{ member.tenant.name }}
+              </option>
+            }
+          </select>
+          <button class="workspace-add" (click)="showCompanyForm.set(!showCompanyForm())">+ empresa</button>
+        </div>
+
+        @if (showCompanyForm()) {
+          <div class="company-form">
+            <input class="input" style="background:#1d2939;color:#d0d5dd;border-color:#344054"
+              [(ngModel)]="companyName" placeholder="Nome da empresa" />
+            <input class="input" style="background:#1d2939;color:#d0d5dd;border-color:#344054"
+              [(ngModel)]="companyCnpj" placeholder="CNPJ (opcional)" />
+            @if (companyError()) {
+              <div class="small" style="color:#f97066">{{ companyError() }}</div>
+            }
+            <button class="btn" style="width:100%" [disabled]="!companyName.trim() || creating()" (click)="createCompany()">
+              {{ creating() ? 'Criando…' : 'Criar empresa' }}
+            </button>
+          </div>
+        }
+
         <a routerLink="/app/overview" routerLinkActive="active">Visão geral</a>
         <a routerLink="/app/insights" routerLinkActive="active">
           Insights de IA
@@ -18,6 +53,7 @@ import { InsightsService } from '../../core/insights.service';
           }
         </a>
         <a routerLink="/app/portfolio" routerLinkActive="active">Carteira</a>
+        <a routerLink="/app/banking" routerLinkActive="active">Extratos</a>
         <a routerLink="/app/analysis" routerLinkActive="active">Análise</a>
         <a routerLink="/app/fixed-income" routerLinkActive="active">Renda fixa</a>
         <a routerLink="/app/alerts" routerLinkActive="active">Alertas</a>
@@ -40,10 +76,47 @@ import { InsightsService } from '../../core/insights.service';
 export class ShellComponent {
   readonly auth = inject(AuthService);
   readonly insights = inject(InsightsService);
+  private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+
+  readonly showCompanyForm = signal(false);
+  readonly creating = signal(false);
+  readonly companyError = signal<string | null>(null);
+  companyName = '';
+  companyCnpj = '';
 
   constructor() {
     this.insights.refreshUnread();
+  }
+
+  onWorkspaceChange(event: Event) {
+    const id = (event.target as HTMLSelectElement).value;
+    if (id && id !== this.auth.tenantId()) {
+      this.auth.selectTenant(id);
+      window.location.reload();
+    }
+  }
+
+  createCompany() {
+    if (!this.companyName.trim()) return;
+    this.creating.set(true);
+    this.companyError.set(null);
+    this.api
+      .post<{ id: string }>('/tenants', {
+        name: this.companyName.trim(),
+        cnpj: this.companyCnpj.trim() || undefined,
+        kind: 'COMPANY',
+      })
+      .subscribe({
+        next: (tenant) => {
+          this.auth.selectTenant(tenant.id);
+          window.location.reload();
+        },
+        error: (err) => {
+          this.creating.set(false);
+          this.companyError.set(err?.error?.message || 'Falha ao criar a empresa.');
+        },
+      });
   }
 
   logout() {

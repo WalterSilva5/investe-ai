@@ -24,6 +24,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
 import { AiModule } from './modules/ai/ai.module';
 import { InsightsModule } from './modules/insights/insights.module';
+import { BankingModule } from './modules/banking/banking.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { InsightsModule } from './modules/insights/insights.module';
     AiProviderModule,
     AiModule,
     InsightsModule,
+    BankingModule,
   ],
   providers: [
     {

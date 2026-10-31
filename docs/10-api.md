@@ -31,7 +31,18 @@ Documentação interativa: `GET /api/docs` (Swagger).
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/tenants` | Tenants do usuário (com papel) |
+| GET | `/tenants` | Workspaces do usuário (com papel, `kind` PF/PJ e CNPJ) |
+| POST | `/tenants` | Cria workspace (empresa) — `{ name, cnpj?, kind? }` — e vincula como OWNER |
+
+## Extratos bancários (`/banking`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/banking/statements` | Lista extratos importados |
+| GET | `/banking/summary?months=6` | Entradas, saídas, saldo e resumo por mês |
+| POST | `/banking/statements` | Importa extrato — `{ name, institution?, format: OFX\|CSV, content }` |
+| GET | `/banking/statements/:id` | Transações de um extrato |
+| DELETE | `/banking/statements/:id` | Remove extrato e transações |
 
 ## Carteira (`/assets`, `/portfolios`, `/transactions`)
 
