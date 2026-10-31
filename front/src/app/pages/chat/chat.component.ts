@@ -34,6 +34,13 @@ interface ConversationSummary {
   updatedAt: string;
 }
 
+interface Profile {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
 @Component({
   selector: 'app-chat',
   imports: [FormsModule, SlicePipe],
@@ -44,10 +51,20 @@ interface ConversationSummary {
     </p>
 
     <div class="chat">
-      <div style="display:flex;gap:10px;align-items:center">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <select
           class="input"
-          style="max-width:340px"
+          style="max-width:240px"
+          [(ngModel)]="profile"
+          title="Perfil do agente"
+        >
+          @for (profile of profiles(); track profile.id) {
+            <option [value]="profile.id">{{ profile.icon }} {{ profile.name }}</option>
+          }
+        </select>
+        <select
+          class="input"
+          style="max-width:300px"
           [value]="conversationId || ''"
           (change)="onConversationChange($event)"
         >
@@ -117,12 +134,17 @@ export class ChatComponent {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly conversations = signal<ConversationSummary[]>([]);
+  readonly profiles = signal<Profile[]>([]);
 
   text = '';
   conversationId: string | null = null;
+  profile = 'geral';
 
   constructor() {
     this.loadConversations();
+    this.api.get<Profile[]>('/ai/profiles').subscribe({
+      next: (profiles) => this.profiles.set(profiles),
+    });
   }
 
   loadConversations() {
@@ -171,7 +193,11 @@ export class ChatComponent {
     this.streamSend(content).catch(() => {
       // fallback não-streaming
       this.api
-        .post<ChatResponse>('/ai/chat', { message: content, conversationId: this.conversationId })
+        .post<ChatResponse>('/ai/chat', {
+          message: content,
+          conversationId: this.conversationId,
+          profile: this.profile || undefined,
+        })
         .subscribe({
           next: (res) => this.applyResponse(res),
           error: (err) => this.failChat(err),
@@ -204,7 +230,11 @@ export class ChatComponent {
         Authorization: `Bearer ${token}`,
         'x-tenant-id': tenantId || '',
       },
-      body: JSON.stringify({ message: content, conversationId: this.conversationId }),
+      body: JSON.stringify({
+        message: content,
+        conversationId: this.conversationId,
+        profile: this.profile || undefined,
+      }),
     });
 
     if (!response.ok || !response.body) {

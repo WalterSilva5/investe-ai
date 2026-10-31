@@ -22,4 +22,8 @@ export class ChatDto {
   @Min(0)
   @Max(1)
   temperature?: number;
+
+  @IsOptional()
+  @IsString()
+  profile?: string;
 }

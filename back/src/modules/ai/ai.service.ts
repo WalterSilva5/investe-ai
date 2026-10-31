@@ -13,6 +13,7 @@ import { PortfoliosService } from '../portfolios/portfolios.service';
 import { MemoriesService } from '../memories/memories.service';
 import { AiToolsService, ToolCitation } from './ai-tools.service';
 import { AiUsageService } from './ai-usage.service';
+import { AgentProfile, findAgentProfile } from './agent-profiles';
 import { ChatDto } from './dto/chat.dto';
 
 const SYSTEM_PROMPT = `Você é o assistente do wsi-invest-ai, uma ferramenta de análise de investimentos.
@@ -58,6 +59,8 @@ export class AiService {
   async chat(tenantId: string, userId: string, dto: ChatDto) {
     await this.usage.assertQuota(userId, tenantId);
     const resolved = await this.registry.resolve(tenantId, dto.providerId, dto.model);
+    const profile = this.resolveProfile(dto.profile);
+    const temperature = dto.temperature ?? profile.temperature ?? 0.3;
 
     let conversation = dto.conversationId
       ? await this.prisma.conversation.findUnique({
@@ -87,7 +90,7 @@ export class AiService {
     }
 
     const baseMessages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: this.systemPrompt(profile) },
       {
         role: 'system',
         content: `Contexto resumido da carteira (${new Date().toISOString()}): ${JSON.stringify(
@@ -111,8 +114,9 @@ export class AiService {
       resolved.provider,
       resolved.model,
       baseMessages,
-      dto.temperature,
+      temperature,
       tenantId,
+      profile.tools,
     );
 
     await this.prisma.$transaction(async (tx) => {
@@ -193,15 +197,31 @@ export class AiService {
     };
   }
 
+  private resolveProfile(profileId?: string): AgentProfile {
+    return findAgentProfile(profileId) || findAgentProfile('geral')!;
+  }
+
+  private systemPrompt(profile: AgentProfile): string {
+    return `${SYSTEM_PROMPT}\n\nPerfil ativo: ${profile.name}.\n${profile.systemPrompt}`;
+  }
+
   private async finalize(
     provider: OpenAICompatibleProvider,
     model: string,
     baseMessages: ChatMessage[],
     temperature: number | undefined,
     tenantId: string,
+    allowedTools?: string[],
   ): Promise<Generation> {
     try {
-      const tools = await this.resolveTools(provider, model, baseMessages, temperature, tenantId);
+      const tools = await this.resolveTools(
+        provider,
+        model,
+        baseMessages,
+        temperature,
+        tenantId,
+        allowedTools,
+      );
       const finalResult = await provider.chat(tools.messages, { model, temperature });
       return {
         content: finalResult.content,
@@ -231,6 +251,8 @@ export class AiService {
   ): AsyncGenerator<Record<string, unknown>> {
     await this.usage.assertQuota(userId, tenantId);
     const resolved = await this.registry.resolve(tenantId, dto.providerId, dto.model);
+    const profile = this.resolveProfile(dto.profile);
+    const temperature = dto.temperature ?? profile.temperature ?? 0.3;
 
     let conversation = dto.conversationId
       ? await this.prisma.conversation.findUnique({
@@ -259,7 +281,7 @@ export class AiService {
     }
 
     const baseMessages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: this.systemPrompt(profile) },
       {
         role: 'system',
         content: `Contexto resumido da carteira (${new Date().toISOString()}): ${JSON.stringify(
@@ -292,8 +314,9 @@ export class AiService {
         resolved.provider,
         resolved.model,
         baseMessages,
-        dto.temperature,
+        temperature,
         tenantId,
+        profile.tools,
       );
     } catch {
       resolvedTools = {
@@ -322,7 +345,7 @@ export class AiService {
     let content = '';
     for await (const chunk of resolved.provider.streamChat(resolvedTools.messages, {
       model: resolvedTools.model,
-      temperature: dto.temperature,
+      temperature,
     })) {
       content += chunk.delta;
       yield { type: 'delta', content: chunk.delta };
@@ -422,6 +445,7 @@ export class AiService {
     baseMessages: ChatMessage[],
     temperature: number | undefined,
     tenantId: string,
+    allowedTools?: string[],
   ): Promise<{
     messages: ChatMessage[];
     citations: ToolCitation[];
@@ -431,7 +455,10 @@ export class AiService {
     model: string;
   }> {
     const messages = [...baseMessages];
-    const tools = this.tools.definitions();
+    const allTools = this.tools.definitions();
+    const tools = allowedTools?.length
+      ? allTools.filter((tool) => allowedTools.includes(tool.function.name))
+      : allTools;
     const citations: ToolCitation[] = [];
     const toolLogs: ToolLog[] = [];
     let tokensIn = 0;

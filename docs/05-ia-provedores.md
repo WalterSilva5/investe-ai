@@ -100,6 +100,22 @@ Regras:
 
 **Teste determinístico:** `POST /api/ai/tools/:name` (auth + tenant) executa a ferramenta sem LLM.
 
+## Perfis de agente
+
+O chat aceita um perfil (`profile` no `ChatDto`) que ajusta prompt, temperatura e allowlist de tools:
+
+| id | Perfil | Foco |
+|---|---|---|
+| `geral` | Assistente geral | todas as tools, resposta equilibrada |
+| `renda-fixa` | Analista de renda fixa | macro, simulação, carteira |
+| `planejador` | Planejador financeiro | runway, projeção, rebalanceamento, memória |
+| `macro` | Macro e cenário | Selic/IPCA/CDI, carteira, notas |
+| `cripto` | Cripto | posições, alocação, notas, memória |
+
+- Catálogo exposto em `GET /api/ai/profiles`.
+- O perfil ativo é injetado no system prompt; se não informado, usa `geral`.
+- A allowlist limita quais tools o modelo pode chamar (guardrail por perfil).
+
 ## Insights periódicos
 
 Dicas geradas por IA a partir de **dados obtidos online**, sem intervenção do usuário:

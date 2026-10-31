@@ -16,6 +16,7 @@ import { TenantGuard } from '../../common/guards/tenant.guard';
 import { AiService } from './ai.service';
 import { AiToolsService } from './ai-tools.service';
 import { AiUsageService } from './ai-usage.service';
+import { AGENT_PROFILES } from './agent-profiles';
 import { ChatDto } from './dto/chat.dto';
 
 @ApiTags('ai')
@@ -68,6 +69,16 @@ export class AiController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.usage.summary(user.userId, tenantId);
+  }
+
+  @Get('profiles')
+  profiles() {
+    return AGENT_PROFILES.map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      description: profile.description,
+      icon: profile.icon,
+    }));
   }
 
   @Post('tools/:name')

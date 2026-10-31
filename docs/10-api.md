@@ -119,6 +119,7 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/ai/providers/:id/models` | Lista modelos |
 | POST | `/ai/chat` | Conversa (tools + citações + passos) |
 | POST | `/ai/chat/stream` | Conversa com streaming (SSE) |
+| GET | `/ai/profiles` | Perfis de agente disponíveis |
 | GET | `/ai/usage` | Quota/uso de IA do mês |
 | POST | `/ai/tools/:name` | Executa tool determinística (teste) |
 | GET | `/ai/conversations` | Histórico de conversas |
