@@ -57,9 +57,16 @@ export class EncryptionService {
       if (hex.length === 32) return hex;
       this.logger.warn('AI_ENCRYPTION_KEY inválida (use 32 bytes em base64/hex).');
     }
+
+    if (config.get<string>('NODE_ENV') === 'production') {
+      throw new Error(
+        'AI_ENCRYPTION_KEY ausente/inválida: defina uma chave de 32 bytes (base64/hex) via env.',
+      );
+    }
+
     const fallback = config.get<string>('JWT_ACCESS_SECRET') || 'dev-only';
     this.logger.warn(
-      'AI_ENCRYPTION_KEY ausente: usando derivação de desenvolvimento. Configure em produção.',
+      'AI_ENCRYPTION_KEY ausente: usando derivação de desenvolvimento (não use em produção).',
     );
     return createHash('sha256').update(fallback).digest();
   }
