@@ -4,6 +4,7 @@ import { AssetType } from '@prisma/client';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
+import { FxService } from './fx.service';
 import { MacroService } from './macro.service';
 import { QuotesService } from './quotes.service';
 
@@ -15,11 +16,17 @@ export class MarketController {
   constructor(
     private readonly macro: MacroService,
     private readonly quotes: QuotesService,
+    private readonly fx: FxService,
   ) {}
 
   @Get('macro')
   getMacro() {
     return this.macro.getMacro();
+  }
+
+  @Get('international')
+  international() {
+    return this.fx.overview();
   }
 
   @Get('quote/:symbol')

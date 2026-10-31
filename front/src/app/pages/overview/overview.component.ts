@@ -20,6 +20,28 @@ interface AiUsage {
   unlimited: boolean;
 }
 
+interface FxQuote {
+  pair: string;
+  code: string;
+  codein: string;
+  bid: number;
+  ask: number;
+  pctChange: number;
+  name: string;
+}
+
+interface GoldData {
+  price?: number;
+  currency?: string;
+  brl?: number;
+  name?: string;
+}
+
+interface International {
+  fx: { available: boolean; rates: FxQuote[] };
+  gold: GoldData;
+}
+
 @Component({
   selector: 'app-overview',
   imports: [RouterLink, DatePipe],
@@ -49,6 +71,28 @@ interface AiUsage {
         <div class="hint">dicas de IA geradas por notícias e métricas</div>
       </div>
     </div>
+
+    <section class="section">
+      <h2>Mercado</h2>
+      <div class="cards">
+        @for (rate of fxRates(); track rate.pair) {
+          <div class="card">
+            <h3>{{ rate.pair }}</h3>
+            <div class="value">R$ {{ rate.bid.toFixed(2) }}</div>
+            <div class="hint {{ rate.pctChange >= 0 ? 'up' : 'down' }}">
+              {{ rate.pctChange >= 0 ? '+' : '' }}{{ rate.pctChange.toFixed(2) }}%
+            </div>
+          </div>
+        }
+        @if (gold().price) {
+          <div class="card">
+            <h3>Ouro (XAU)</h3>
+            <div class="value">US$ {{ gold().price!.toFixed(0) }}</div>
+            <div class="hint">≈ R$ {{ gold().brl?.toFixed(0) || '—' }}</div>
+          </div>
+        }
+      </div>
+    </section>
 
     <section class="section">
       <div class="insights-head">
@@ -142,6 +186,7 @@ export class OverviewComponent {
   readonly latestInsights = signal<Insight[]>([]);
   readonly refreshing = signal(false);
   readonly refreshError = signal<string | null>(null);
+  readonly international = signal<International | null>(null);
 
   constructor() {
     this.api.get<Provider[]>('/ai/providers').subscribe({
@@ -152,6 +197,9 @@ export class OverviewComponent {
     });
     this.api.get<AiUsage>('/ai/usage').subscribe({
       next: (usage) => this.usage.set(usage),
+    });
+    this.api.get<International>('/market/international').subscribe({
+      next: (data) => this.international.set(data),
     });
     this.loadInsights();
     this.insights.refreshUnread();
@@ -182,6 +230,14 @@ export class OverviewComponent {
 
   latest(): Insight[] {
     return this.latestInsights().slice(0, 3);
+  }
+
+  fxRates(): FxQuote[] {
+    return this.international()?.fx?.rates || [];
+  }
+
+  gold(): GoldData {
+    return this.international()?.gold || {};
   }
 
   refreshInsights() {

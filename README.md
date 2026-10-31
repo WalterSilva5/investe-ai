@@ -19,6 +19,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 - **Renda fixa:** simulação e comparação CDB/LCI/LCA/Tesouro com IR/isenção.
 - **Macro:** Selic, IPCA e CDI via BCB (cache).
 - **Cotações:** B3 (brapi) e cripto (CoinGecko), atualização manual e agendada.
+- **Câmbio e ouro:** USD/BRL, EUR/BRL, GBP/BRL (AwesomeAPI) e ouro (gold-api) com conversão para BRL.
 - **Análise:** runway, projeção de patrimônio e rebalanceamento.
 - **Alertas** de alocação e macro.
 - **Importação CSV** e **relatórios CSV/PDF**.

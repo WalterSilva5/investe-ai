@@ -3,6 +3,7 @@ import { Insight } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
 import { MacroService } from '../market/macro.service';
+import { FxService } from '../market/fx.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
 import { MailService } from '../mail/mail.service';
 import { NewsItem, NewsService } from './news.service';
@@ -43,6 +44,7 @@ export class InsightsService {
     private readonly registry: AiProviderRegistry,
     private readonly portfolios: PortfoliosService,
     private readonly macro: MacroService,
+    private readonly fx: FxService,
     private readonly news: NewsService,
     private readonly mail: MailService,
   ) {}
@@ -80,14 +82,16 @@ export class InsightsService {
   }
 
   async refresh(tenantId: string, notifyEmail = false) {
-    const [macroData, portfolioCtx, news] = await Promise.all([
+    const [macroData, internationalData, portfolioCtx, news] = await Promise.all([
       this.macro.getMacro(),
+      this.fx.overview(),
       this.portfolios.aiContext(tenantId),
       this.news.headlines(12),
     ]);
 
     const context = {
       macro: macroData,
+      international: internationalData,
       portfolio: portfolioCtx,
       news: news.map((item, index) => ({
         index,

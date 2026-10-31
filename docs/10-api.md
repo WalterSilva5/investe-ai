@@ -65,6 +65,7 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/market/macro` | Selic, IPCA e CDI (BCB) |
+| GET | `/market/international` | Câmbio (USD/EUR/GBP) + ouro, com ouro em BRL |
 | GET | `/market/quote/:symbol` | Cotação (brapi/CoinGecko) |
 | POST | `/market/refresh` | Atualiza cotações da carteira padrão |
 

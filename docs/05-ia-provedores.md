@@ -120,7 +120,7 @@ O chat aceita um perfil (`profile` no `ChatDto`) que ajusta prompt, temperatura 
 
 Dicas geradas por IA a partir de **dados obtidos online**, sem intervenção do usuário:
 
-- **Entradas:** macro (Selic/IPCA/CDI via BCB) + cotações/carteira + **manchetes de notícias via RSS** (InfoMoney, Exame, Agência Brasil, CoinDesk, The Block; lista configurável em `INSIGHT_NEWS_FEEDS`).
+- **Entradas:** macro (Selic/IPCA/CDI via BCB) + câmbio/ouro (USD/EUR/GBP + XAU) + cotações/carteira + **manchetes de notícias via RSS** (InfoMoney, Exame, Agência Brasil, CoinDesk, The Block; lista configurável em `INSIGHT_NEWS_FEEDS`).
 - **Geração:** o provedor configurado produz de 3 a 5 insights com categoria (`MACRO`, `RENDA_FIXA`, `ACOES`, `CRIPTO`, `CARTEIRA`), título, texto e **fontes** (links das notícias usadas).
 - **Cadência:** cron diário (dias úteis 8h, `ENABLE_CRON`) + gatilho manual `POST /api/insights/refresh`.
 - **Notificação:** badge de não lidos na barra lateral + painel dedicado com filtro por categoria; digest por **e-mail** (via SMTP, opcional em `SMTP_*`) enviado no cron aos membros `OWNER`/`ADMIN`.

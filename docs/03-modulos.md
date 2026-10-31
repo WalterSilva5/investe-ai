@@ -81,7 +81,7 @@
 | `assets` | ✅ CRUD básico |
 | `portfolios` | ✅ CRUD, contas, posições, alocação e resumo |
 | `transactions` | ✅ criação/exclusão + recálculo de posição |
-| `market-data` | ✅ macro BCB + cotações (brapi/CoinGecko) |
+| `market-data` | ✅ macro BCB + cotações (brapi/CoinGecko) + câmbio (AwesomeAPI) + ouro (gold-api) |
 | `scheduler` | ✅ cron de cotações + alertas (dias úteis 18h) |
 | `fixed-income` | ✅ simulação e comparação (IR/isenção) |
 | `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
