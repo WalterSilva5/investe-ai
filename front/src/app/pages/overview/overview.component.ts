@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
+import { Insight, InsightsService } from '../../core/insights.service';
 
 interface Provider {
   id: string;
@@ -17,22 +18,6 @@ interface AiUsage {
   remaining: number;
   percent: number;
   unlimited: boolean;
-}
-
-interface InsightSource {
-  title: string;
-  url: string;
-  source?: string;
-}
-
-interface Insight {
-  id: string;
-  category: string;
-  title: string;
-  content: string;
-  sources?: InsightSource[] | null;
-  generatedAt: string;
-  isRead: boolean;
 }
 
 @Component({
@@ -59,9 +44,9 @@ interface Insight {
         <div class="hint">{{ usageHint() }}</div>
       </div>
       <div class="card">
-        <h3>Próxima fase</h3>
-        <div class="value">Insights</div>
-        <div class="hint">dicas geradas por IA com notícias e métricas</div>
+        <h3>Insights não lidos</h3>
+        <div class="value">{{ insights.unread() }}</div>
+        <div class="hint">dicas de IA geradas por notícias e métricas</div>
       </div>
     </div>
 
@@ -70,27 +55,28 @@ interface Insight {
         <div>
           <h2>Insights de IA</h2>
           <p class="muted small">
-            Gerados a partir de notícias, indicadores (Selic, IPCA, CDI) e da sua carteira.
+            Dicas geradas a partir de notícias, indicadores (Selic, IPCA, CDI) e da sua carteira.
             Conteúdo educacional — não é recomendação de investimento.
           </p>
         </div>
-        <button class="btn secondary" (click)="refreshInsights()" [disabled]="refreshing()">
-          {{ refreshing() ? 'Gerando…' : 'Atualizar agora' }}
-        </button>
+        <div class="insights-actions">
+          <a routerLink="/app/insights" class="btn secondary">Ver todos</a>
+          <button class="btn" (click)="refreshInsights()" [disabled]="refreshing()">
+            {{ refreshing() ? 'Gerando…' : 'Atualizar agora' }}
+          </button>
+        </div>
       </div>
 
-      @if (insightsLoading()) {
-        <div class="muted">Carregando…</div>
-      } @else if (insights().length === 0) {
+      @if (latest().length === 0) {
         <div class="row">
           <div>
             <div class="name">Nenhum insight ainda</div>
-            <div class="meta">Clique em "Atualizar agora" para gerar (exige um provedor de IA configurado).</div>
+            <div class="meta">Configure um provedor de IA e clique em "Atualizar agora".</div>
           </div>
         </div>
       } @else {
         <div class="list">
-          @for (insight of insights(); track insight.id) {
+          @for (insight of latest(); track insight.id) {
             <div class="insight">
               <div class="insight-top">
                 <span class="badge {{ categoryClass(insight.category) }}">
@@ -100,16 +86,6 @@ interface Insight {
               </div>
               <div class="insight-title">{{ insight.title }}</div>
               <div class="insight-body">{{ insight.content }}</div>
-              @if (insight.sources?.length) {
-                <div class="insight-sources">
-                  <span class="muted small">Fontes:</span>
-                  @for (source of insight.sources; track source.url) {
-                    <a [href]="source.url" target="_blank" rel="noopener">
-                      {{ source.source || source.title }}
-                    </a>
-                  }
-                </div>
-              }
             </div>
           }
         </div>
@@ -158,13 +134,12 @@ interface Insight {
 export class OverviewComponent {
   private readonly api = inject(ApiService);
   readonly auth = inject(AuthService);
+  readonly insights = inject(InsightsService);
 
   readonly providers = signal<Provider[]>([]);
   readonly configured = signal(0);
   readonly usage = signal<AiUsage | null>(null);
-
-  readonly insights = signal<Insight[]>([]);
-  readonly insightsLoading = signal(true);
+  readonly latestInsights = signal<Insight[]>([]);
   readonly refreshing = signal(false);
   readonly refreshError = signal<string | null>(null);
 
@@ -179,6 +154,7 @@ export class OverviewComponent {
       next: (usage) => this.usage.set(usage),
     });
     this.loadInsights();
+    this.insights.refreshUnread();
   }
 
   tenantName(): string {
@@ -199,23 +175,23 @@ export class OverviewComponent {
   }
 
   loadInsights() {
-    this.insightsLoading.set(true);
-    this.api.get<Insight[]>('/insights').subscribe({
-      next: (items) => {
-        this.insights.set(items);
-        this.insightsLoading.set(false);
-      },
-      error: () => this.insightsLoading.set(false),
+    this.insights.load().subscribe({
+      next: (items) => this.latestInsights.set(items),
     });
+  }
+
+  latest(): Insight[] {
+    return this.latestInsights().slice(0, 3);
   }
 
   refreshInsights() {
     this.refreshing.set(true);
     this.refreshError.set(null);
-    this.api.post<{ generated: number }>('/insights/refresh', {}).subscribe({
+    this.insights.refresh().subscribe({
       next: () => {
         this.refreshing.set(false);
         this.loadInsights();
+        this.insights.refreshUnread();
       },
       error: (err) => {
         this.refreshing.set(false);

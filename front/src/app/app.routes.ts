@@ -5,6 +5,7 @@ import { AlertsComponent } from './pages/alerts/alerts.component';
 import { AnalysisComponent } from './pages/analysis/analysis.component';
 import { ChatComponent } from './pages/chat/chat.component';
 import { FixedIncomeComponent } from './pages/fixed-income/fixed-income.component';
+import { InsightsComponent } from './pages/insights/insights.component';
 import { LoginComponent } from './pages/login/login.component';
 import { ForgotPasswordComponent } from './pages/forgot-password/forgot-password.component';
 import { SecurityComponent } from './pages/security/security.component';
@@ -27,6 +28,7 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'overview' },
       { path: 'overview', component: OverviewComponent },
+      { path: 'insights', component: InsightsComponent },
       { path: 'portfolio', component: PortfolioComponent },
       { path: 'analysis', component: AnalysisComponent },
       { path: 'fixed-income', component: FixedIncomeComponent },

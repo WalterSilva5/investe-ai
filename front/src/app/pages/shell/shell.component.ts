@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { InsightsService } from '../../core/insights.service';
 
 @Component({
   selector: 'app-shell',
@@ -10,6 +11,12 @@ import { AuthService } from '../../core/auth.service';
       <aside class="sidebar">
         <div class="logo">wsi<span>-invest-ai</span></div>
         <a routerLink="/app/overview" routerLinkActive="active">Visão geral</a>
+        <a routerLink="/app/insights" routerLinkActive="active">
+          Insights de IA
+          @if (insights.unread() > 0) {
+            <span class="nav-badge">{{ insights.unread() }}</span>
+          }
+        </a>
         <a routerLink="/app/portfolio" routerLinkActive="active">Carteira</a>
         <a routerLink="/app/analysis" routerLinkActive="active">Análise</a>
         <a routerLink="/app/fixed-income" routerLinkActive="active">Renda fixa</a>
@@ -32,7 +39,12 @@ import { AuthService } from '../../core/auth.service';
 })
 export class ShellComponent {
   readonly auth = inject(AuthService);
+  readonly insights = inject(InsightsService);
   private readonly router = inject(Router);
+
+  constructor() {
+    this.insights.refreshUnread();
+  }
 
   logout() {
     this.auth.logout();

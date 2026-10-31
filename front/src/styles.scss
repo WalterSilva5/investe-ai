@@ -161,6 +161,19 @@ a:hover { text-decoration: underline; }
 
 .insights-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .insights-head h2 { margin: 0 0 4px; }
+.insights-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.insights-actions { display: flex; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.chip:hover { border-color: var(--primary); color: var(--primary); }
+.chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.nav-badge {
+  display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
+  background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px;
+}
 .insight {
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
   display: flex; flex-direction: column; gap: 6px;
@@ -168,6 +181,7 @@ a:hover { text-decoration: underline; }
 .insight-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .insight-title { font-weight: 700; }
 .insight-body { white-space: pre-wrap; }
+.insight.unread { border-left: 3px solid var(--primary); }
 .insight-sources { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
 .insight-sources a { font-size: 12.5px; }
 .badge.cat-macro { background: #eef4ff; color: #1f6feb; }

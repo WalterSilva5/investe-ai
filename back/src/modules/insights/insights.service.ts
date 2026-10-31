@@ -1,8 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Insight } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
 import { MacroService } from '../market/macro.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
+import { MailService } from '../mail/mail.service';
 import { NewsItem, NewsService } from './news.service';
 
 const INSIGHT_PROMPT = `Você gera "insights" diários para um investidor pessoa física no Brasil.
@@ -42,14 +44,33 @@ export class InsightsService {
     private readonly portfolios: PortfoliosService,
     private readonly macro: MacroService,
     private readonly news: NewsService,
+    private readonly mail: MailService,
   ) {}
 
-  list(tenantId: string) {
+  list(tenantId: string, category?: string) {
     return this.prisma.insight.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ...(category ? { category } : {}),
+      },
       orderBy: { generatedAt: 'desc' },
-      take: 30,
+      take: 50,
     });
+  }
+
+  async unreadCount(tenantId: string) {
+    const unread = await this.prisma.insight.count({
+      where: { tenantId, isRead: false },
+    });
+    return { unread };
+  }
+
+  async markAllRead(tenantId: string) {
+    const result = await this.prisma.insight.updateMany({
+      where: { tenantId, isRead: false },
+      data: { isRead: true },
+    });
+    return { updated: result.count };
   }
 
   async markRead(tenantId: string, id: string) {
@@ -58,7 +79,7 @@ export class InsightsService {
     return this.prisma.insight.update({ where: { id }, data: { isRead: true } });
   }
 
-  async refresh(tenantId: string) {
+  async refresh(tenantId: string, notifyEmail = false) {
     const [macroData, portfolioCtx, news] = await Promise.all([
       this.macro.getMacro(),
       this.portfolios.aiContext(tenantId),
@@ -112,11 +133,42 @@ export class InsightsService {
       ),
     );
 
+    let email: { sent: boolean; reason?: string } | undefined;
+    if (notifyEmail) {
+      email = await this.sendDigest(tenantId, created);
+    }
+
     return {
       generated: created.length,
       providerId: resolved.providerId,
       model: resolved.model,
+      ...(email ? { email } : {}),
     };
+  }
+
+  private async sendDigest(
+    tenantId: string,
+    insights: Insight[],
+  ): Promise<{ sent: boolean; reason?: string }> {
+    if (!insights.length) return { sent: false, reason: 'no-insights' };
+    if (!this.mail.enabled) return { sent: false, reason: 'smtp-not-configured' };
+
+    const members = await this.prisma.membership.findMany({
+      where: { tenantId, role: { in: ['OWNER', 'ADMIN'] } },
+      include: { user: { select: { email: true } } },
+    });
+    const emails = members.map((m) => m.user.email).filter(Boolean);
+    if (!emails.length) return { sent: false, reason: 'no-recipients' };
+
+    const text = insights
+      .map((insight) => `[${insight.category}] ${insight.title}\n${insight.content}`)
+      .join('\n\n---\n\n');
+
+    return this.mail.send({
+      to: emails.join(','),
+      subject: 'wsi-invest-ai — novos insights de IA',
+      text: `${text}\n\n(Conteúdo educacional — não é recomendação de investimento.)`,
+    });
   }
 
   private mapSources(indexes: number[] | undefined, news: NewsItem[]) {

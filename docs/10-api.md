@@ -128,9 +128,13 @@ Documentação interativa: `GET /api/docs` (Swagger).
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/insights` | Lista os insights gerados (últimos 30) |
+| GET | `/insights` | Lista os insights (filtro opcional `?category=`) |
+| GET | `/insights/unread-count` | Conta insights não lidos |
 | POST | `/insights/refresh` | Gera novos insights (notícias + macro + carteira) |
+| POST | `/insights/read-all` | Marca todos como lidos |
 | PATCH | `/insights/:id/read` | Marca um insight como lido |
+
+Categorias: `MACRO`, `RENDA_FIXA`, `ACOES`, `CRIPTO`, `CARTEIRA`, `GERAL`.
 
 ## Admin (`/admin`)
 

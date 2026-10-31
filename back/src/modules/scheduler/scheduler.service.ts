@@ -61,8 +61,12 @@ export class SchedulerService {
 
     for (const tenant of tenants) {
       try {
-        const result = await this.insights.refresh(tenant.id);
-        this.logger.log(`Insights ${tenant.id}: ${result.generated} gerado(s).`);
+        const result = await this.insights.refresh(tenant.id, true);
+        const email = (result as { email?: { sent: boolean; reason?: string } }).email;
+        this.logger.log(
+          `Insights ${tenant.id}: ${result.generated} gerado(s)` +
+            (email ? ` · e-mail ${email.sent ? 'enviado' : `ignorado (${email.reason})`}` : ''),
+        );
       } catch (error) {
         this.logger.warn(`Falha ao gerar insights ${tenant.id}: ${(error as Error).message}`);
       }

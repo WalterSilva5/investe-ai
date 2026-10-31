@@ -86,7 +86,7 @@
 | `fixed-income` | ✅ simulação e comparação (IR/isenção) |
 | `ai-provider` | ✅ registry, credenciais criptografadas, teste/modelos |
 | `ai` | ✅ chat com tools (carteira/macro/renda fixa/notas/memória/runway/projeção/rebalance), streaming (SSE), citações, passos, quota mensal, histórico, uso e auditoria |
-| `insights` | ✅ dicas de IA geradas de notícias (RSS) + macro + carteira, com cron diário e fontes |
+| `insights` | ✅ dicas de IA (notícias RSS + macro + carteira), painel com filtro por categoria, badge de não lidos, digest por e-mail e cron diário |
 | `audit` | 🟡 gravação de eventos de IA; tela depois |
 | `analysis` | ✅ runway, projeção e rebalanceamento |
 | `alerts` | ✅ CRUD + avaliação (alocação máxima e macro) |
