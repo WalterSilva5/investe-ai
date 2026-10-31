@@ -1,15 +1,63 @@
 # wsi-invest-ai
 
-Assistente pessoal de investimentos com agente de IA: organiza carteira, compara renda fixa, acompanha macro (Selic, IPCA, CDI), simula cenários e explica decisões — **sem executar ordens**.
+Assistente pessoal de investimentos com **agente de IA**: organiza carteira, compara renda fixa, acompanha macro (Selic, IPCA, CDI), projeta patrimônio, emite alertas e explica decisões — **sem executar ordens**.
 
 > **Aviso:** ferramenta educacional e analítica. Não é recomendação de investimento, não substitui contador/consultor e não executa operações.
 
+## Funcionalidades
+
+### Plataforma
+
+- **Multi-tenant** com papéis (`OWNER/ADMIN/MEMBER/VIEWER`) e isolamento testado.
+- **Auth:** e-mail/senha (Argon2), Google OAuth, JWT + refresh rotativo, **2FA (TOTP)**, troca e reset de senha.
+- **Admin** (`ADMIN_EMAILS`): visão geral, usuários e uso de IA.
+- **Hardening:** Helmet, rate limit global e no login/registro, CORS configurável, chaves criptografadas.
+
+### Investimentos
+
+- **Carteira:** ativos, contas, transações, posições, alocação e resumo.
+- **Renda fixa:** simulação e comparação CDB/LCI/LCA/Tesouro com IR/isenção.
+- **Macro:** Selic, IPCA e CDI via BCB (cache).
+- **Cotações:** B3 (brapi) e cripto (CoinGecko), atualização manual e agendada.
+- **Análise:** runway, projeção de patrimônio e rebalanceamento.
+- **Alertas** de alocação e macro.
+- **Importação CSV** e **relatórios CSV/PDF**.
+
+### Agente de IA
+
+- **Multi-provedor** (OpenCode padrão, OpenAI, OpenRouter, Groq, DeepSeek, Mistral, Together, Gemini, LM Studio, Ollama).
+- **Tools determinísticas** (carteira, macro, renda fixa, notas, memória, análise) com **citação de fonte e data**.
+- **Streaming (SSE)** token a token, com fallback.
+- **Memória do agente** (`remember`/`search_memory`) e **notas** (`search_documents`).
+- Quota mensal, histórico de conversas, passos visíveis e auditoria.
+
 ## Stack
 
-- **Back:** NestJS 11 · Prisma 6 · PostgreSQL 16 · Redis 7 + BullMQ · JWT + Google OAuth · Swagger.
-- **Front:** Angular 20 · Tailwind + DaisyUI · NgRx · ngx-charts.
-- **IA:** LangChain.js + LangGraph.js, multi-provedor (OpenCode primeiro).
+- **Back:** NestJS 11 · Prisma 6 · PostgreSQL 16 · Redis 7 · BullMQ · Swagger.
+- **Front:** Angular 20 · Tailwind · NgRx (parcial) · ngx-charts.
+- **IA:** OpenAI SDK (adaptador compatible), SSE.
 - **Infra:** Docker Compose, execução local.
+
+## Início rápido
+
+```bash
+cd wsi-invest-ai
+./scripts/up.sh        # sobe Docker, API (3000) e front (4200)
+```
+
+Ou manualmente:
+
+```bash
+docker compose up -d
+cd back && cp .env.example .env   # edite DATABASE_URL, segredos e OPENCODE_API_KEY
+cd back && npm install && npx prisma migrate dev && npm run build
+cd back && nohup node dist/main > /tmp/wsi-api.log 2>&1 &
+cd ../front && npm install && npm start -- --host 0.0.0.0
+```
+
+- **Web:** http://localhost:4200
+- **API:** http://localhost:3000/api
+- **Swagger:** http://localhost:3000/api/docs
 
 ## Estrutura
 
@@ -17,8 +65,8 @@ Assistente pessoal de investimentos com agente de IA: organiza carteira, compara
 wsi-invest-ai/
 ├── back/          # API NestJS + Prisma
 ├── front/         # SPA Angular
-├── docs/          # visão, arquitetura, planos, módulos, segurança
-├── infra/         # compose, scripts auxiliares
+├── docs/          # documentação
+├── scripts/       # up.sh, backup.sh, restore.sh
 └── docker-compose.yml
 ```
 
@@ -27,59 +75,47 @@ wsi-invest-ai/
 | Documento | Conteúdo |
 |---|---|
 | [Visão geral](docs/00-visao-geral.md) | problema, escopo, princípios, métricas |
-| [Arquitetura](docs/01-arquitetura.md) | camadas, multi-tenant, IA, fluxo de dados |
+| [Arquitetura](docs/01-arquitetura.md) | camadas, multi-tenant, IA, fluxo |
 | [Plano de desenvolvimento](docs/02-plano-desenvolvimento.md) | fases, tarefas, critérios de aceite |
-| [Módulos](docs/03-modulos.md) | catálogo de módulos back/front |
+| [Módulos](docs/03-modulos.md) | catálogo back/front + status |
 | [Modelo de dados](docs/04-modelo-dados.md) | entidades, relações, regras |
 | [IA e provedores](docs/05-ia-provedores.md) | registry, roteamento, tools, guardrails |
 | [Segurança e LGPD](docs/06-seguranca-lgpd.md) | ameaças, isolamento, privacidade |
 | [ADRs](docs/07-adr.md) | decisões arquiteturais |
 | [Roadmap](docs/08-roadmap.md) | MVP, beta, pós-MVP |
-| [Ambiente local](docs/09-ambiente-local.md) | como rodar |
+| [Ambiente local](docs/09-ambiente-local.md) | como rodar, backup |
+| [API](docs/10-api.md) | referência de endpoints |
+| [Agente de IA](docs/11-agente-de-ia.md) | arquitetura, tools, memória, streaming |
 
-## Início rápido
+## Scripts
 
-```bash
-# 1. infraestrutura
-docker compose up -d
+| Script | O que faz |
+|---|---|
+| `scripts/up.sh` | Sobe infra + API + front |
+| `scripts/backup.sh` | Backup do Postgres (retém 7 dias) |
+| `scripts/restore.sh` | Restaura a partir de um `.sql.gz` |
 
-# 2. backend
-cd back
-cp .env.example .env
-npm install
-npx prisma migrate dev
-npm run start:dev
+## Variáveis principais (`back/.env`)
 
-# 3. frontend
-cd ../front
-npm install
-npm start
+```env
+DATABASE_URL=postgresql://wsi:wsi@localhost:5433/wsi_invest?schema=public
+JWT_ACCESS_SECRET=...        JWT_REFRESH_SECRET=...
+GOOGLE_CLIENT_ID=...         GOOGLE_CLIENT_SECRET=...
+OPENCODE_API_KEY=...         OPENCODE_MODEL=deepseek-v4-pro
+AI_ENCRYPTION_KEY=...        AI_MONTHLY_TOKEN_QUOTA=200000
+ADMIN_EMAILS=...             CORS_ORIGINS=...
+BRAPI_TOKEN=                 ENABLE_CRON=true
 ```
 
-- API: `http://localhost:3000/api`
-- Swagger: `http://localhost:3000/api/docs`
-- Web: `http://localhost:4200`
+## Testes
 
-## Status
+```bash
+cd back && npm test   # 10 testes: renda fixa, isolamento multi-tenant, projeção
+```
 
-Fundação + carteira + renda fixa + macro + alertas + importação/relatório + cotações + agente com tools.
+## Próximo
 
-- Auth multi-tenant (e-mail/senha, Google OAuth opcional, refresh rotativo).
-- Carteira manual: ativos, transações, posições, alocação, resumo.
-- Renda fixa: simulação e comparação com IR/isenção.
-- Macro: Selic, IPCA e CDI via BCB.
-- Análise: runway, projeção de patrimônio e rebalanceamento (também via agente).
-- Alertas de alocação máxima e macro.
-- Importação CSV de transações e relatório CSV/PDF da carteira.
-- Cotações B3/cripto com atualização manual e agendada (dias úteis, 18h).
-- IA: registry multi-provedor, OpenCode padrão, chaves criptografadas, chat com **tools determinísticas** (carteira, macro, renda fixa), citações, **quota mensal**, uso e auditoria.
-- **Testes de isolamento multi-tenant** cobrindo carteira, resumo e transações.
-- **Admin** (ADMIN_EMAILS) com visão geral, usuários e uso de IA.
-- **Notas** com busca textual e tool `search_documents` para o agente (RAG-lite).
-- **Memória do agente** (fatos/decisões/preferências) com tools `remember` e `search_memory`; passos visíveis no chat.
-- **Streaming (SSE)** no chat: resposta token a token (`POST /ai/chat/stream`), com fallback não-streaming.
-- **Backup/restore** via `scripts/backup.sh` e `scripts/restore.sh`.
-- **Hardening:** Helmet, rate limit global e no login/registro, CORS configurável, **2FA (TOTP)** e **troca/reset de senha**.
-- Frontend: login, visão geral, carteira, renda fixa, alertas, chat e configuração de provedores.
-
-Próximo: RAG e preparação para usuários externos (túnel/TLS, backup automatizado).
+- Perfis de agente (prompts/tools por papel).
+- RAG com embeddings (hoje é busca textual).
+- Moedas múltiplas e cotações internacionais.
+- Exposição a usuários externos (túnel/TLS, backup agendado, termos/privacidade).
