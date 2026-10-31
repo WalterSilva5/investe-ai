@@ -53,7 +53,21 @@ interface Provider {
 
         <div class="field">
           <label for="model">Modelo</label>
-          <input id="model" class="input" [(ngModel)]="model" [placeholder]="selected()?.model || 'modelo'" />
+          @if (models().length) {
+            <select id="model" class="input" [(ngModel)]="model">
+              @for (m of models(); track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+            <p class="small muted" style="margin-top:6px">
+              {{ models().length }} modelo(s) retornado(s) pelo provedor.
+            </p>
+          } @else {
+            <input id="model" class="input" [(ngModel)]="model" [placeholder]="selected()?.model || 'modelo'" />
+            <p class="small muted" style="margin-top:6px">
+              Clique em "Testar conexão" para listar os modelos disponíveis.
+            </p>
+          }
         </div>
 
         <div class="field">
@@ -90,6 +104,7 @@ export class SettingsComponent {
   readonly ok = signal(false);
   readonly saving = signal(false);
   readonly testing = signal(false);
+  readonly models = signal<string[]>([]);
 
   apiKey = '';
   model = '';
@@ -104,6 +119,7 @@ export class SettingsComponent {
     this.model = provider.model;
     this.baseUrl = provider.baseUrl;
     this.apiKey = '';
+    this.models.set([]);
     this.message.set(null);
   }
 
@@ -141,18 +157,31 @@ export class SettingsComponent {
     this.testing.set(true);
     this.message.set(null);
 
-    this.api.post<{ ok: boolean; message: string }>(`/ai/providers/${provider.id}/test`, {}).subscribe({
-      next: (res) => {
-        this.ok.set(res.ok);
-        this.message.set(res.message);
-        this.testing.set(false);
-      },
-      error: (err) => {
-        this.ok.set(false);
-        this.message.set(err?.error?.message || 'Falha no teste de conexão.');
-        this.testing.set(false);
-      },
-    });
+    this.api
+      .post<{ ok: boolean; message: string; models?: string[] }>(
+        `/ai/providers/${provider.id}/test`,
+        {
+          apiKey: this.apiKey || undefined,
+          model: this.model || undefined,
+          baseUrl: this.baseUrl || undefined,
+        },
+      )
+      .subscribe({
+        next: (res) => {
+          this.ok.set(res.ok);
+          this.message.set(res.message);
+          if (res.models?.length) {
+            this.models.set(res.models);
+            if (!this.model) this.model = res.models[0];
+          }
+          this.testing.set(false);
+        },
+        error: (err) => {
+          this.ok.set(false);
+          this.message.set(err?.error?.message || 'Falha no teste de conexão.');
+          this.testing.set(false);
+        },
+      });
   }
 
   private load() {

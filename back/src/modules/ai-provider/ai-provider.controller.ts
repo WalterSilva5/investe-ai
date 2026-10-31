@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { SaveCredentialDto } from './dto/save-credential.dto';
+import { TestProviderDto } from './dto/test-provider.dto';
 
 @ApiTags('ai-providers')
 @ApiBearerAuth()
@@ -37,8 +38,12 @@ export class AiProviderController {
   }
 
   @Post(':providerId/test')
-  test(@TenantId() tenantId: string, @Param('providerId') providerId: string) {
-    return this.registry.test(tenantId, providerId);
+  test(
+    @TenantId() tenantId: string,
+    @Param('providerId') providerId: string,
+    @Body() dto: TestProviderDto,
+  ) {
+    return this.registry.test(tenantId, providerId, dto);
   }
 
   @Get(':providerId/models')

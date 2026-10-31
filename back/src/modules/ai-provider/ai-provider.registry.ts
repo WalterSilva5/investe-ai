@@ -11,8 +11,9 @@ import {
   OpenAICompatibleProvider,
   ProviderConfig,
 } from './openai-compatible.provider';
-import { findProvider, PROVIDER_CATALOG } from './provider.catalog';
+import { findProvider, PROVIDER_CATALOG, ProviderDefinition } from './provider.catalog';
 import { SaveCredentialDto } from './dto/save-credential.dto';
+import { TestProviderDto } from './dto/test-provider.dto';
 
 export interface ResolvedProvider {
   providerId: string;
@@ -96,9 +97,19 @@ export class AiProviderRegistry {
       );
     }
 
-    const config: ProviderConfig = { baseUrl, apiKey, defaultModel: finalModel };
+    return this.makeProvider(def, apiKey, baseUrl, finalModel, tenantId);
+  }
 
-    if (id === 'opencode') {
+  private makeProvider(
+    def: ProviderDefinition,
+    apiKey: string,
+    baseUrl: string,
+    model: string,
+    tenantId: string,
+  ): ResolvedProvider {
+    const config: ProviderConfig = { baseUrl, apiKey, defaultModel: model };
+
+    if (def.id === 'opencode') {
       config.extraHeaders = {
         'x-opencode-session': createHash('sha256')
           .update(`wsi-invest-ai:${tenantId}`)
@@ -109,8 +120,8 @@ export class AiProviderRegistry {
     }
 
     return {
-      providerId: id,
-      model: finalModel,
+      providerId: def.id,
+      model,
       provider: new OpenAICompatibleProvider(config),
     };
   }
@@ -150,8 +161,27 @@ export class AiProviderRegistry {
     return { ok: true, providerId: def.id };
   }
 
-  async test(tenantId: string, providerId: string) {
-    const resolved = await this.resolve(tenantId, providerId);
+  async test(tenantId: string, providerId: string, dto?: TestProviderDto) {
+    const def = findProvider(providerId);
+    if (!def) throw new NotFoundException(`Provedor desconhecido: ${providerId}`);
+
+    let resolved: ResolvedProvider;
+    if (dto?.apiKey) {
+      const model = dto.model || def.defaultModel;
+      if (!model) {
+        throw new BadRequestException(`Defina um modelo para o provedor "${def.name}".`);
+      }
+      resolved = this.makeProvider(
+        def,
+        dto.apiKey,
+        dto.baseUrl || def.baseUrl,
+        model,
+        tenantId,
+      );
+    } else {
+      resolved = await this.resolve(tenantId, providerId);
+    }
+
     const result = await resolved.provider.testConnection();
     return { ...result, providerId: resolved.providerId, model: resolved.model };
   }
