@@ -80,8 +80,8 @@ interface Provider {
         }
 
         <div style="display:flex;gap:10px;margin-top:18px">
-          <button class="btn" [disabled]="!apiKey || saving()" (click)="save()">
-            {{ saving() ? 'Salvando…' : 'Salvar chave' }}
+          <button class="btn" [disabled]="(!apiKey && !selected()?.configured) || saving()" (click)="save()">
+            {{ saving() ? 'Salvando…' : 'Salvar' }}
           </button>
           <button class="btn secondary" [disabled]="testing()" (click)="test()">
             {{ testing() ? 'Testando…' : 'Testar conexão' }}
@@ -89,7 +89,8 @@ interface Provider {
         </div>
 
         <p class="small muted" style="margin-top:14px">
-          A chave nunca é devolvida pela API. Para trocar, salve uma nova.
+          A chave nunca é devolvida pela API — para trocá-la, salve uma nova. Salvar sem preencher a
+          chave atualiza apenas o modelo/base URL.
         </p>
       </section>
     </div>
@@ -125,27 +126,37 @@ export class SettingsComponent {
 
   save() {
     const provider = this.selected();
-    if (!provider || !this.apiKey) return;
+    if (!provider) return;
+    if (!this.apiKey && !provider.configured) {
+      this.ok.set(false);
+      this.message.set('Informe a chave para configurar este provedor.');
+      return;
+    }
     this.saving.set(true);
     this.message.set(null);
 
     this.api
       .post(`/ai/providers/${provider.id}/credential`, {
-        apiKey: this.apiKey,
+        apiKey: this.apiKey || undefined,
         model: this.model || undefined,
         baseUrl: this.baseUrl || undefined,
       })
       .subscribe({
         next: () => {
+          const hadKey = Boolean(this.apiKey);
           this.ok.set(true);
-          this.message.set('Chave salva com sucesso.');
+          this.message.set(
+            hadKey
+              ? 'Chave salva com sucesso.'
+              : 'Configuração atualizada (chave mantida).',
+          );
           this.saving.set(false);
           this.apiKey = '';
           this.load();
         },
         error: (err) => {
           this.ok.set(false);
-          this.message.set(err?.error?.message || 'Falha ao salvar a chave.');
+          this.message.set(err?.error?.message || 'Falha ao salvar.');
           this.saving.set(false);
         },
       });

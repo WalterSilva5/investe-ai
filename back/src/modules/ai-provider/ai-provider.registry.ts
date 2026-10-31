@@ -135,23 +135,38 @@ export class AiProviderRegistry {
     const def = findProvider(providerId);
     if (!def) throw new NotFoundException(`Provedor desconhecido: ${providerId}`);
 
-    const enc = this.encryption.encrypt(dto.apiKey);
+    const existing = await this.prisma.providerCredential.findUnique({
+      where: { tenantId_providerId: { tenantId, providerId: def.id } },
+    });
+
+    // Chave opcional na edição: mantém a existente se não informada.
+    let keyData: { encryptedKey: string; iv: string; authTag: string };
+    if (dto.apiKey) {
+      keyData = this.encryption.encrypt(dto.apiKey);
+    } else if (existing) {
+      keyData = {
+        encryptedKey: existing.encryptedKey,
+        iv: existing.iv,
+        authTag: existing.authTag,
+      };
+    } else {
+      throw new BadRequestException(
+        `Informe a chave do provedor "${def.name}" para configurá-lo.`,
+      );
+    }
+
     await this.prisma.providerCredential.upsert({
       where: { tenantId_providerId: { tenantId, providerId: def.id } },
       create: {
         tenantId,
         userId,
         providerId: def.id,
-        encryptedKey: enc.encryptedKey,
-        iv: enc.iv,
-        authTag: enc.authTag,
+        ...keyData,
         baseUrl: dto.baseUrl || def.baseUrl,
         model: dto.model || def.defaultModel,
       },
       update: {
-        encryptedKey: enc.encryptedKey,
-        iv: enc.iv,
-        authTag: enc.authTag,
+        ...keyData,
         baseUrl: dto.baseUrl || def.baseUrl,
         model: dto.model || def.defaultModel,
         enabled: true,
