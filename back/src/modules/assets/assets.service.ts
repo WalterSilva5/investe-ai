@@ -14,8 +14,8 @@ export class AssetsService {
         ...(search
           ? {
               OR: [
-                { symbol: { contains: search, mode: 'insensitive' } },
-                { name: { contains: search, mode: 'insensitive' } },
+                { symbol: { contains: search } },
+                { name: { contains: search } },
               ],
             }
           : {}),

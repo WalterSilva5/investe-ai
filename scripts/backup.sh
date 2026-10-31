@@ -2,18 +2,23 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DB_FILE="$ROOT/back/prisma/dev.db"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
-CONTAINER="${PG_CONTAINER:-wsi-invest-postgres}"
-DB_USER="${PG_USER:-wsi}"
-DB_NAME="${PG_DB:-wsi_invest}"
+
+[ -f "$DB_FILE" ] || { echo "banco não encontrado: $DB_FILE" >&2; exit 1; }
 
 mkdir -p "$BACKUP_DIR"
 STAMP="$(date +%Y%m%d_%H%M%S)"
-FILE="$BACKUP_DIR/wsi_invest_$STAMP.sql.gz"
+FILE="$BACKUP_DIR/wsi_invest_$STAMP.db"
 
-docker exec "$CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "$FILE"
+# sqlite3 .backup faz cópia consistente; senão, cp simples.
+if command -v sqlite3 >/dev/null 2>&1; then
+  sqlite3 "$DB_FILE" ".backup '$FILE'"
+else
+  cp "$DB_FILE" "$FILE"
+fi
 
 # Retenção: 7 dias
-find "$BACKUP_DIR" -name 'wsi_invest_*.sql.gz' -mtime +7 -delete
+find "$BACKUP_DIR" -name 'wsi_invest_*.db' -mtime +7 -delete
 
 echo "backup: $FILE"

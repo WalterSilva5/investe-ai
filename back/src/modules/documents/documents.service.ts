@@ -44,9 +44,9 @@ export class DocumentsService {
       where: {
         tenantId,
         OR: [
-          { title: { contains: q, mode: 'insensitive' } },
-          { body: { contains: q, mode: 'insensitive' } },
-          { tags: { contains: q, mode: 'insensitive' } },
+          { title: { contains: q } },
+          { body: { contains: q } },
+          { tags: { contains: q } },
         ],
       },
       orderBy: { updatedAt: 'desc' },

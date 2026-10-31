@@ -40,9 +40,9 @@ export class MemoriesService {
       where: {
         tenantId,
         OR: [
-          { content: { contains: q, mode: 'insensitive' } },
-          { tags: { contains: q, mode: 'insensitive' } },
-          { kind: { contains: q, mode: 'insensitive' } },
+          { content: { contains: q } },
+          { tags: { contains: q } },
+          { kind: { contains: q } },
         ],
       },
       orderBy: [{ importance: 'desc' }, { updatedAt: 'desc' }],

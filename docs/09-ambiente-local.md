@@ -1,33 +1,30 @@
 # 09 — Ambiente local
 
+O app é local-first: usa **SQLite** (arquivo único) e não precisa de servidor de banco, Redis ou Docker.
+
 ## Pré-requisitos
 
 - Node.js 20+ (recomendado 22 LTS; o ambiente atual tem 26).
 - npm 10+.
-- Docker + Docker Compose.
 - Git.
 
-## Subir infraestrutura
+## Banco de dados
 
-```bash
-cd wsi-invest-ai
-docker compose up -d
-```
+SQLite, sem servidor. O arquivo fica em `back/prisma/dev.db` (criado automaticamente via `prisma db push`).
 
-Serviços:
-- PostgreSQL: `localhost:5433`
-- Redis: `localhost:6379`
+- Não há `docker compose` — removido junto com Postgres/Redis.
+- Ajuste o schema em `back/prisma/schema.prisma` e rode `npx prisma db push` (local dev).
 
 ## Backend
 
 ```bash
 cd back
 cp .env.example .env
-# edite DATABASE_URL, JWT secrets e OPENCODE_API_KEY
+# edite os JWT secrets e o OPENCODE_API_KEY
 npm install
-npx prisma generate
-npx prisma migrate dev
-npm run start:dev
+npx prisma db push     # cria o dev.db
+npm run build
+nohup node dist/main > /tmp/wsi-api.log 2>&1 &
 ```
 
 - API: `http://localhost:3000/api`
@@ -38,28 +35,31 @@ npm run start:dev
 ```bash
 cd front
 npm install
-npm start
+npm start -- --host 0.0.0.0
 ```
 
 - Web: `http://localhost:4200`
+
+## Subir tudo de uma vez
+
+```bash
+./scripts/up.sh
+```
 
 ## Expor para usuários (local)
 
 - **LAN:** acesse pelo IP da máquina; libere a porta no firewall.
 - **Fora da rede:** use um túnel com TLS (ex.: Cloudflare Tunnel).
-- Nunca exponha Postgres/Redis.
-- Para múltiplos usuários, mantenha backup e atualização do host.
+- Para múltiplos usuários, mantenha backup do `dev.db` e atualização do host.
 
 ## Comandos úteis
 
 ```bash
 # banco
 npx prisma studio
-npx prisma migrate dev --name <nome>
-npx prisma migrate reset
+npx prisma db push     # aplica o schema (local dev)
 
 # qualidade
-npm run lint
 npm test
 npm run build
 ```
@@ -69,9 +69,7 @@ npm run build
 ```env
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=postgresql://wsi:wsi@localhost:5433/wsi_invest?schema=public
-REDIS_HOST=localhost
-REDIS_PORT=6379
+DATABASE_URL=file:./dev.db
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
 GOOGLE_CLIENT_ID=
@@ -88,21 +86,19 @@ AI_ENCRYPTION_KEY=
 ## Backup e restauração
 
 ```bash
-# backup (mantém 7 dias)
+# backup (copia dev.db, mantém 7 dias)
 ./scripts/backup.sh
 
 # restaurar
-./scripts/restore.sh backups/wsi_invest_YYYYmmdd_HHMMSS.sql.gz
+./scripts/restore.sh backups/wsi_invest_YYYYmmdd_HHMMSS.db
 ```
-
-Variáveis: `PG_CONTAINER`, `PG_USER`, `PG_DB`, `BACKUP_DIR`.
 
 ## Solução de problemas
 
 | Sintoma | Causa | Correção |
 |---|---|---|
-| `P1001` banco | Postgres não subiu | `docker compose ps` / logs |
+| `P1003` banco | `dev.db` não existe | rodar `npx prisma db push` |
 | CORS | `FRONTEND_URL` errado | ajustar env |
 | Login Google | callback divergente | conferir URL no Google Console |
 | IA 401 | chave/modelo | testar conexão em Configurações |
-| Migração falha | schema divergente | `prisma migrate reset` (dev) |
+| Schema divergente | model mudou | `npx prisma db push` (dev) |

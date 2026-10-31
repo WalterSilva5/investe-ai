@@ -10,7 +10,7 @@ Entrega incremental, com o **número sempre vindo de código**. Cada fase termin
 
 **Objetivo:** projeto roda, autentica, isola tenants e conversa com um provedor de IA.
 
-- [ ] Monorepo, `.gitignore`, `.env.example`, `docker-compose.yml`.
+- [ ] Monorepo, `.gitignore`, `.env.example`, `scripts/up.sh`.
 - [ ] Backend NestJS 11 + Prisma 6 + Swagger + Pino.
 - [ ] `schema.prisma` inicial (tenant, user, membership, provider).
 - [ ] Auth e-mail/senha + JWT + refresh.

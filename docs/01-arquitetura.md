@@ -11,8 +11,8 @@
                          ┌───────────────────────────────┼───────────────────────────────┐
                          │                               │                               │
                   ┌──────▼──────┐                 ┌──────▼──────┐                 ┌──────▼──────┐
-                  │ PostgreSQL  │                 │   Redis     │                 │  Provedores │
-                  │ dados/tenant│                 │ cache/filas │                 │  de IA      │
+                  │ SQLite       │                 │   Cache mem.      │                 │  Provedores │
+                  │ dados/tenant│                 │ in-memory    │                 │  de IA      │
                   └─────────────┘                 └─────────────┘                 └─────────────┘
 ```
 
@@ -88,16 +88,16 @@ Detalhe em [05-ia-provedores](05-ia-provedores.md).
 
 ## Dados
 
-- **PostgreSQL:** domínio, histórico, auditoria.
-- **Redis:** cache de cotações/macro, rate limit, filas BullMQ.
+- **SQLite:** domínio, histórico, auditoria (arquivo `back/prisma/dev.db`).
+- **Cache:** em memória por serviço (macro/cotações) — sem Redis.
 - **Proveniência:** toda série/valor guarda `source` e `fetchedAt`.
 
 ## Deploy local
 
-- `docker compose` sobe Postgres e Redis.
-- API e web rodam no host (dev) ou em containers (produção local).
+- Sem Docker: SQLite em arquivo, sem servidor de banco.
+- API e web rodam no host (dev).
 - Exposição para usuários: LAN ou túnel (Cloudflare Tunnel). Para uso local, sem TLS público; para usuários externos, usar túnel com TLS.
-- Backup do Postgres é responsabilidade do operador.
+- Backup do SQLite é feito por `scripts/backup.sh`.
 
 ## Requisitos não funcionais
 

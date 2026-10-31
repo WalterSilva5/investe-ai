@@ -12,6 +12,8 @@
 **Motivo:** consistência, transações, pgvector futuro, BullMQ.
 **Consequência:** dois serviços no compose.
 
+> **Supersedido pelo ADR-011 (SQLite).** Uso pessoal/local não justifica manter Postgres/Redis; o app migrou para SQLite em arquivo único.
+
 ## ADR-003 — Angular 20
 
 **Decisão:** Angular, não React.
@@ -59,3 +61,9 @@
 **Decisão:** posicionamento educacional/analítico, com disclaimer.
 **Motivo:** reduz risco regulatório (CVM) e responsabilidade.
 **Consequência:** o agente explica e compara, não diz "compre/venda".
+
+## ADR-011 — SQLite (local-first)
+
+**Decisão:** trocar PostgreSQL + Redis por SQLite em arquivo único (`back/prisma/dev.db`).
+**Motivo:** uso pessoal, sem usuários reais e sem escala; elimina Docker, compose e dois serviços.
+**Consequência:** sem `pgvector`/BullMQ; busca continua textual; backup vira cópia do arquivo (`scripts/backup.sh`). Migração futura para Postgres é possível via `prisma db push`/`migrate` quando houver demanda.

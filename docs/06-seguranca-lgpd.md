@@ -10,7 +10,7 @@
 | Prompt injection | Alto | tool allowlist, sem HTTP do modelo, validação de saída |
 | Dados de mercado adulterados | Médio | proveniência, cache, fonte única |
 | Exposição local (LAN/túnel) | Médio | túnel com TLS, firewall, auth obrigatória |
-| Backup perdido | Alto | backup diário do Postgres + teste de restore |
+| Backup perdido | Alto | backup do SQLite (dev.db) + teste de restore |
 | Abuso de IA | Médio | quota, rate limit, custo por usuário |
 
 ## Autenticação
@@ -71,5 +71,5 @@
 
 - Uso pessoal: `localhost`.
 - Usuários convidados: túnel com TLS (Cloudflare Tunnel) ou VPN.
-- Nunca expor Postgres/Redis diretamente.
+- Nunca expor o banco diretamente.
 - Firewall e atualização do host.

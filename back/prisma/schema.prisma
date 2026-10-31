@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -154,7 +154,7 @@ model Message {
   citations      Json?
   tokensIn       Int         @default(0)
   tokensOut      Int         @default(0)
-  cost           Decimal     @default(0) @db.Decimal(18, 6)
+  cost           Decimal     @default(0)
   createdAt      DateTime    @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -249,9 +249,9 @@ model Transaction {
   accountId   String?
   assetId     String
   type        TransactionType
-  quantity    Decimal         @db.Decimal(18, 6)
-  price       Decimal         @db.Decimal(18, 6)
-  fees        Decimal         @default(0) @db.Decimal(18, 6)
+  quantity    Decimal        
+  price       Decimal        
+  fees        Decimal         @default(0)
   date        DateTime
   notes       String?
   createdAt   DateTime        @default(now())
@@ -268,9 +268,9 @@ model Position {
   id           String   @id @default(cuid())
   portfolioId  String
   assetId      String
-  quantity     Decimal  @default(0) @db.Decimal(18, 6)
-  averagePrice Decimal  @default(0) @db.Decimal(18, 6)
-  invested     Decimal  @default(0) @db.Decimal(18, 6)
+  quantity     Decimal  @default(0)
+  averagePrice Decimal  @default(0)
+  invested     Decimal  @default(0)
   updatedAt    DateTime @updatedAt
 
   portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
@@ -283,7 +283,7 @@ model Price {
   id        String   @id @default(cuid())
   assetId   String
   date      DateTime
-  close     Decimal  @db.Decimal(18, 6)
+  close     Decimal 
   source    String
   fetchedAt DateTime @default(now())
 
@@ -297,7 +297,7 @@ model FxRate {
   id     String   @id @default(cuid())
   pair   String
   date   DateTime
-  rate   Decimal  @db.Decimal(18, 6)
+  rate   Decimal 
   source String
   fetchedAt DateTime @default(now())
 
@@ -308,7 +308,7 @@ model MacroSeries {
   id     String   @id @default(cuid())
   code   String
   date   DateTime
-  value  Decimal  @db.Decimal(18, 6)
+  value  Decimal 
   source String
   fetchedAt DateTime @default(now())
 
@@ -321,7 +321,7 @@ model FixedIncomeRate {
   issuer    String
   product   String
   indexer   String
-  rate      Decimal  @db.Decimal(18, 6)
+  rate      Decimal 
   maturity  DateTime?
   source    String
   fetchedAt DateTime @default(now())
@@ -346,7 +346,7 @@ model Goal {
   id           String   @id @default(cuid())
   tenantId     String
   name         String
-  targetAmount Decimal  @db.Decimal(18, 6)
+  targetAmount Decimal 
   targetDate   DateTime?
   priority     Int      @default(1)
   createdAt    DateTime @default(now())
@@ -389,7 +389,7 @@ model AiUsage {
   model     String
   tokensIn  Int      @default(0)
   tokensOut Int      @default(0)
-  cost      Decimal  @default(0) @db.Decimal(18, 6)
+  cost      Decimal  @default(0)
   task      String?
   createdAt DateTime @default(now())
 

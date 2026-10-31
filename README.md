@@ -36,24 +36,23 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 
 ## Stack
 
-- **Back:** NestJS 11 · Prisma 6 · PostgreSQL 16 · Redis 7 · BullMQ · Swagger.
+- **Back:** NestJS 11 · Prisma 6 · SQLite · Swagger.
 - **Front:** Angular 20 · Tailwind · NgRx (parcial) · ngx-charts.
 - **IA:** OpenAI SDK (adaptador compatible), SSE.
-- **Infra:** Docker Compose, execução local.
+- **Infra:** local-first, sem Docker (SQLite em arquivo).
 
 ## Início rápido
 
 ```bash
 cd wsi-invest-ai
-./scripts/up.sh        # sobe Docker, API (3000) e front (4200)
+./scripts/up.sh        # sobe API (3000) e front (4200) — SQLite, sem Docker
 ```
 
 Ou manualmente:
 
 ```bash
-docker compose up -d
-cd back && cp .env.example .env   # edite DATABASE_URL, segredos e OPENCODE_API_KEY
-cd back && npm install && npx prisma migrate dev && npm run build
+cd back && cp .env.example .env   # edite segredos e OPENCODE_API_KEY
+cd back && npm install && npx prisma db push && npm run build
 cd back && nohup node dist/main > /tmp/wsi-api.log 2>&1 &
 cd ../front && npm install && npm start -- --host 0.0.0.0
 ```
@@ -66,11 +65,10 @@ cd ../front && npm install && npm start -- --host 0.0.0.0
 
 ```
 wsi-invest-ai/
-├── back/          # API NestJS + Prisma
+├── back/          # API NestJS + Prisma (SQLite em prisma/dev.db)
 ├── front/         # SPA Angular
 ├── docs/          # documentação
-├── scripts/       # up.sh, backup.sh, restore.sh
-└── docker-compose.yml
+└── scripts/       # up.sh, backup.sh, restore.sh
 ```
 
 ## Documentação
@@ -94,14 +92,14 @@ wsi-invest-ai/
 
 | Script | O que faz |
 |---|---|
-| `scripts/up.sh` | Sobe infra + API + front |
-| `scripts/backup.sh` | Backup do Postgres (retém 7 dias) |
-| `scripts/restore.sh` | Restaura a partir de um `.sql.gz` |
+| `scripts/up.sh` | Sobe API + front (SQLite, sem Docker) |
+| `scripts/backup.sh` | Backup do SQLite `dev.db` (retém 7 dias) |
+| `scripts/restore.sh` | Restaura a partir de um `.db` |
 
 ## Variáveis principais (`back/.env`)
 
 ```env
-DATABASE_URL=postgresql://wsi:wsi@localhost:5433/wsi_invest?schema=public
+DATABASE_URL=file:./dev.db
 JWT_ACCESS_SECRET=...        JWT_REFRESH_SECRET=...
 GOOGLE_CLIENT_ID=...         GOOGLE_CLIENT_SECRET=...
 OPENCODE_API_KEY=...         OPENCODE_MODEL=deepseek-v4-pro
