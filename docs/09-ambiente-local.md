@@ -23,6 +23,7 @@ cp .env.example .env
 # edite os JWT secrets e o OPENCODE_API_KEY
 npm install
 npx prisma db push     # cria o dev.db
+npm run seed           # usuários admin/demo + dados de demonstração
 npm run build
 nohup node dist/main > /tmp/wsi-api.log 2>&1 &
 ```

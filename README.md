@@ -52,10 +52,17 @@ Ou manualmente:
 
 ```bash
 cd back && cp .env.example .env   # edite segredos e OPENCODE_API_KEY
-cd back && npm install && npx prisma db push && npm run build
+cd back && npm install && npx prisma db push && npm run seed && npm run build
 cd back && nohup node dist/main > /tmp/wsi-api.log 2>&1 &
 cd ../front && npm install && npm start -- --host 0.0.0.0
 ```
+
+**Usuários de demonstração (via `npm run seed`):**
+
+| E-mail | Senha | Perfil |
+|---|---|---|
+| `admin@wsi.local` | `admin123` | admin (acesso a `/admin`) |
+| `demo@wsi.local` | `demo123` | carteira de exemplo (ações, FIIs, ETF, cripto e renda fixa) |
 
 - **Web:** http://localhost:4200
 - **API:** http://localhost:3000/api
