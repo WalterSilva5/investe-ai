@@ -23,6 +23,10 @@ export class ApiService {
     return this.http.delete<T>(`${API_BASE_URL}${path}`);
   }
 
+  postFormData<T>(path: string, formData: FormData): Observable<T> {
+    return this.http.post<T>(`${API_BASE_URL}${path}`, formData);
+  }
+
   getBlob(path: string): Observable<Blob> {
     return this.http.get(`${API_BASE_URL}${path}`, { responseType: 'blob' });
   }

@@ -20,6 +20,7 @@ interface BankTransaction {
   description: string;
   amount: number;
   type: string;
+  category?: string | null;
 }
 
 interface MonthBucket {
@@ -30,12 +31,20 @@ interface MonthBucket {
   count: number;
 }
 
+interface CategoryBucket {
+  category: string;
+  income: number;
+  expense: number;
+  count: number;
+}
+
 interface Summary {
   income: number;
   expense: number;
   net: number;
   count: number;
   byMonth: MonthBucket[];
+  byCategory: CategoryBucket[];
 }
 
 @Component({
@@ -44,7 +53,7 @@ interface Summary {
   template: `
     <h1 class="page-title">Extratos bancários</h1>
     <p class="page-sub">
-      Importe seus extratos (OFX/CSV) para acompanhar entradas, saídas e saldo — PF e empresas.
+      Importe seus extratos (OFX/CSV/PDF) para acompanhar entradas, saídas, saldo e categorias.
     </p>
 
     <div class="cards" style="margin-bottom:20px">
@@ -63,6 +72,25 @@ interface Summary {
     </div>
 
     <section class="section">
+      <h2>Saídas por categoria</h2>
+      @if (!summary()?.byCategory?.length) {
+        <div class="muted">Sem dados ainda.</div>
+      } @else {
+        <div class="cat-list">
+          @for (cat of expenseCategories(); track cat.category) {
+            <div class="cat-row">
+              <span class="cat-label">{{ cat.category }}</span>
+              <div class="cat-bar">
+                <div class="cat-bar-fill" [style.width.%]="barWidth(cat.expense)"></div>
+              </div>
+              <span class="muted small">R$ {{ fmt(cat.expense) }}</span>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="section">
       <h2>Importar extrato</h2>
       <div class="grid-2">
         <div class="field">
@@ -74,26 +102,33 @@ interface Summary {
           <input class="input" [(ngModel)]="institution" placeholder="Ex.: Nubank" />
         </div>
       </div>
+
       <div class="field">
-        <label>Formato</label>
-        <select class="input" [(ngModel)]="format">
+        <label>Enviar arquivo (OFX, CSV ou PDF)</label>
+        <input class="input" type="file" accept=".ofx,.csv,.pdf" (change)="onFileSelected($event)" />
+        <button class="btn" style="margin-top:8px" [disabled]="uploading() || !file || !name.trim()" (click)="uploadFile()">
+          {{ uploading() ? 'Enviando…' : 'Enviar arquivo' }}
+        </button>
+      </div>
+
+      <div class="field" style="margin-top:16px">
+        <label>…ou cole o conteúdo (OFX/CSV)</label>
+        <select class="input" [(ngModel)]="format" style="margin-bottom:8px">
           <option value="OFX">OFX (.ofx)</option>
           <option value="CSV">CSV</option>
         </select>
+        <textarea class="input" rows="5" [(ngModel)]="content" placeholder="Cole o conteúdo do arquivo…"></textarea>
+        <button class="btn" style="margin-top:8px" [disabled]="importing() || !name.trim() || !content.trim()" (click)="importStatement()">
+          {{ importing() ? 'Importando…' : 'Importar conteúdo' }}
+        </button>
       </div>
-      <div class="field">
-        <label>Conteúdo do arquivo</label>
-        <textarea class="input" rows="6" [(ngModel)]="content" placeholder="Cole o conteúdo do arquivo OFX ou CSV…"></textarea>
-      </div>
+
       @if (error()) {
         <div class="alert error">{{ error() }}</div>
       }
       @if (okMsg()) {
         <div class="alert ok">{{ okMsg() }}</div>
       }
-      <button class="btn" [disabled]="importing() || !name.trim() || !content.trim()" (click)="importStatement()">
-        {{ importing() ? 'Importando…' : 'Importar' }}
-      </button>
     </section>
 
     <section class="section">
@@ -126,13 +161,18 @@ interface Summary {
         <div class="list">
           @for (transaction of transactions(); track transaction.id) {
             <div class="row">
-              <div>
+              <div style="flex:1">
                 <div class="name">{{ transaction.description }}</div>
                 <div class="meta">{{ transaction.date | date: 'dd/MM/yyyy' }}</div>
               </div>
               <div class="hint {{ transaction.amount >= 0 ? 'up' : 'down' }}">
                 {{ transaction.amount >= 0 ? '+' : '' }}R$ {{ fmt(transaction.amount) }}
               </div>
+              <select class="input" style="max-width:150px" [value]="transaction.category || 'Outros'" (change)="changeCategory(transaction.id, $event)">
+                @for (category of categories(); track category) {
+                  <option [value]="category">{{ category }}</option>
+                }
+              </select>
             </div>
           }
         </div>
@@ -145,9 +185,11 @@ export class BankingComponent {
 
   readonly statements = signal<BankStatement[]>([]);
   readonly summary = signal<Summary | null>(null);
+  readonly categories = signal<string[]>([]);
   readonly selected = signal<BankStatement | null>(null);
   readonly transactions = signal<BankTransaction[]>([]);
   readonly importing = signal(false);
+  readonly uploading = signal(false);
   readonly error = signal<string | null>(null);
   readonly okMsg = signal<string | null>(null);
 
@@ -155,9 +197,13 @@ export class BankingComponent {
   institution = '';
   format = 'OFX';
   content = '';
+  file: File | null = null;
 
   constructor() {
     this.load();
+    this.api.get<string[]>('/banking/categories').subscribe({
+      next: (items) => this.categories.set(items),
+    });
   }
 
   load() {
@@ -166,6 +212,47 @@ export class BankingComponent {
     });
     this.api.get<Summary>('/banking/summary').subscribe({
       next: (summary) => this.summary.set(summary),
+    });
+  }
+
+  expenseCategories(): CategoryBucket[] {
+    return (this.summary()?.byCategory || []).filter((c) => c.expense < 0);
+  }
+
+  barWidth(expense: number): number {
+    const max = Math.max(1, ...(this.summary()?.byCategory || []).map((c) => Math.abs(c.expense)));
+    return Math.round((Math.abs(expense) / max) * 100);
+  }
+
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.file = input.files?.[0] || null;
+  }
+
+  uploadFile() {
+    if (!this.file || !this.name.trim()) return;
+    this.uploading.set(true);
+    this.error.set(null);
+    this.okMsg.set(null);
+
+    const formData = new FormData();
+    formData.append('file', this.file);
+    formData.append('name', this.name.trim());
+    if (this.institution.trim()) formData.append('institution', this.institution.trim());
+
+    this.api.postFormData<{ imported: number }>('/banking/statements/upload', formData).subscribe({
+      next: (res) => {
+        this.uploading.set(false);
+        this.okMsg.set(`${res.imported} transação(ões) importada(s).`);
+        this.file = null;
+        this.name = '';
+        this.institution = '';
+        this.load();
+      },
+      error: (err) => {
+        this.uploading.set(false);
+        this.error.set(err?.error?.message || 'Falha ao enviar o arquivo.');
+      },
     });
   }
 
@@ -204,6 +291,13 @@ export class BankingComponent {
       .subscribe({
         next: (res) => this.transactions.set(res.transactions),
       });
+  }
+
+  changeCategory(id: string, event: Event) {
+    const category = (event.target as HTMLSelectElement).value;
+    this.api.patch(`/banking/transactions/${id}`, { category }).subscribe({
+      next: () => this.load(),
+    });
   }
 
   remove(id: string, event: Event) {

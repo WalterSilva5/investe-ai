@@ -23,7 +23,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 - **Câmbio e ouro:** USD/BRL, EUR/BRL, GBP/BRL (AwesomeAPI) e ouro (gold-api) com conversão para BRL.
 - **Análise:** runway, projeção de patrimônio e rebalanceamento.
 - **Alertas** de alocação e macro.
-- **Extratos bancários:** importação de **OFX/CSV** com entradas, saídas, saldo e resumo por mês.
+- **Extratos bancários:** importação de **OFX/CSV/PDF** (upload ou colar) com categorização automática, entradas, saídas, saldo e resumo por categoria.
 - **Importação CSV** e **relatórios CSV/PDF**.
 
 ### Agente de IA

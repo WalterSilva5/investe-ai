@@ -1,5 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
@@ -23,9 +37,37 @@ export class BankingController {
     return this.banking.summary(tenantId, months ? Number(months) : 6);
   }
 
+  @Get('categories')
+  categories() {
+    return this.banking.listCategories();
+  }
+
+  @Post('recategorize')
+  recategorize(@TenantId() tenantId: string) {
+    return this.banking.recategorize(tenantId);
+  }
+
   @Post('statements')
   import(@TenantId() tenantId: string, @Body() dto: ImportStatementDto) {
     return this.banking.import(tenantId, dto);
+  }
+
+  @Post('statements/upload')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  upload(
+    @TenantId() tenantId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { name?: string; institution?: string; format?: string },
+  ) {
+    if (!file) throw new BadRequestException('Arquivo não enviado.');
+    const format = (body.format || this.detectFormat(file.originalname, file.mimetype)).toUpperCase();
+    return this.banking.importFile(tenantId, {
+      name: body.name?.trim() || file.originalname,
+      institution: body.institution?.trim() || undefined,
+      format,
+      buffer: file.buffer,
+    });
   }
 
   @Get('statements/:id')
@@ -36,5 +78,25 @@ export class BankingController {
   @Delete('statements/:id')
   remove(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.banking.remove(tenantId, id);
+  }
+
+  @Patch('transactions/:id')
+  updateCategory(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { category?: string },
+  ) {
+    if (!body?.category) throw new BadRequestException('Informe a categoria.');
+    return this.banking.updateCategory(tenantId, id, body.category);
+  }
+
+  private detectFormat(filename: string, mimetype: string): string {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    if (ext === 'ofx') return 'OFX';
+    if (ext === 'csv') return 'CSV';
+    if (ext === 'pdf') return 'PDF';
+    if (mimetype?.includes('pdf')) return 'PDF';
+    if (mimetype?.includes('csv')) return 'CSV';
+    return 'OFX';
   }
 }

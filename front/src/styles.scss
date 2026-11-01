@@ -196,6 +196,12 @@ a:hover { text-decoration: underline; }
 .insight.unread { border-left: 3px solid var(--primary); }
 .hint.up { color: var(--success); }
 .hint.down { color: var(--danger); }
+
+.cat-list { display: flex; flex-direction: column; gap: 8px; }
+.cat-row { display: grid; grid-template-columns: 130px 1fr 90px; gap: 10px; align-items: center; }
+.cat-label { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-bar { background: #eef1f5; border-radius: 6px; height: 12px; overflow: hidden; }
+.cat-bar-fill { height: 100%; background: var(--primary); border-radius: 6px; }
 .insight-sources { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
 .insight-sources a { font-size: 12.5px; }
 .badge.cat-macro { background: #eef4ff; color: #1f6feb; }

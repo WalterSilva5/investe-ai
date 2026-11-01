@@ -39,10 +39,14 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/banking/statements` | Lista extratos importados |
-| GET | `/banking/summary?months=6` | Entradas, saídas, saldo e resumo por mês |
-| POST | `/banking/statements` | Importa extrato — `{ name, institution?, format: OFX\|CSV, content }` |
+| GET | `/banking/summary?months=6` | Entradas, saídas, saldo, por mês e por categoria |
+| GET | `/banking/categories` | Categorias disponíveis |
+| POST | `/banking/statements` | Importa colando conteúdo — `{ name, institution?, format: OFX\|CSV, content }` |
+| POST | `/banking/statements/upload` | Importa arquivo (multipart) — OFX/CSV/PDF |
+| POST | `/banking/recategorize` | Reaplica a categorização automática nas transações sem categoria |
 | GET | `/banking/statements/:id` | Transações de um extrato |
 | DELETE | `/banking/statements/:id` | Remove extrato e transações |
+| PATCH | `/banking/transactions/:id` | Altera a categoria — `{ category }` |
 
 ## Carteira (`/assets`, `/portfolios`, `/transactions`)
 
