@@ -12,6 +12,11 @@ describe('BankingService', () => {
     bankTransaction: {
       createMany: jest.fn(),
       findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+    transaction: {
+      findMany: jest.fn(),
     },
   };
 
@@ -58,5 +63,23 @@ describe('BankingService', () => {
     await expect(
       service.import('tenant1', { name: 'x', format: 'OFX', content: 'sem transacoes' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('concilia extrato com transação da carteira por valor e data', async () => {
+    prisma.transaction.findMany.mockResolvedValue([
+      { id: 't1', type: 'BUY', quantity: 100, price: 38.5, fees: 0, date: new Date('2026-10-01') },
+    ]);
+    prisma.bankTransaction.findMany.mockResolvedValue([
+      { id: 'b1', amount: -3850, date: new Date('2026-10-02') },
+    ]);
+    prisma.bankTransaction.update.mockResolvedValue({ id: 'b1' });
+
+    const result = await service.reconcile('tenant1');
+
+    expect(result).toEqual({ matched: 1, unmatched: 0, total: 1 });
+    expect(prisma.bankTransaction.update).toHaveBeenCalledWith({
+      where: { id: 'b1' },
+      data: expect.objectContaining({ portfolioTransactionId: 't1' }),
+    });
   });
 });

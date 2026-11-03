@@ -21,6 +21,13 @@ interface BankTransaction {
   amount: number;
   type: string;
   category?: string | null;
+  reconciledAt?: string | null;
+  portfolioTransactionId?: string | null;
+}
+
+interface Reconciliation {
+  matched: BankTransaction[];
+  unmatched: BankTransaction[];
 }
 
 interface MonthBucket {
@@ -84,6 +91,45 @@ interface Summary {
                 <div class="cat-bar-fill" [style.width.%]="barWidth(cat.expense)"></div>
               </div>
               <span class="muted small">R$ {{ fmt(cat.expense) }}</span>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="section">
+      <div class="insights-head">
+        <div>
+          <h2>Conciliação com a carteira</h2>
+          <p class="muted small">
+            Casa lançamentos do extrato com transações da carteira por valor e data (±3 dias).
+          </p>
+        </div>
+        <button class="btn" [disabled]="reconciling()" (click)="runReconcile()">
+          {{ reconciling() ? 'Conciliando…' : 'Conciliar com a carteira' }}
+        </button>
+      </div>
+
+      @if (reconciliation()) {
+        <div class="row">
+          <div>
+            <div class="name">{{ reconciliation()!.matched.length }} conciliada(s)</div>
+            <div class="meta">{{ reconciliation()!.unmatched.length }} pendente(s)</div>
+          </div>
+        </div>
+      }
+
+      @if (reconciliation()?.unmatched?.length) {
+        <div class="list" style="margin-top:8px">
+          @for (transaction of reconciliation()!.unmatched.slice(0, 10); track transaction.id) {
+            <div class="row">
+              <div>
+                <div class="name">{{ transaction.description }}</div>
+                <div class="meta">{{ transaction.date | date: 'dd/MM/yyyy' }}</div>
+              </div>
+              <span class="hint {{ transaction.amount >= 0 ? 'up' : 'down' }}">
+                {{ transaction.amount >= 0 ? '+' : '' }}R$ {{ fmt(transaction.amount) }}
+              </span>
             </div>
           }
         </div>
@@ -162,7 +208,12 @@ interface Summary {
           @for (transaction of transactions(); track transaction.id) {
             <div class="row">
               <div style="flex:1">
-                <div class="name">{{ transaction.description }}</div>
+                <div class="name">
+                  {{ transaction.description }}
+                  @if (transaction.reconciledAt) {
+                    <span class="badge ok">conciliado</span>
+                  }
+                </div>
                 <div class="meta">{{ transaction.date | date: 'dd/MM/yyyy' }}</div>
               </div>
               <div class="hint {{ transaction.amount >= 0 ? 'up' : 'down' }}">
@@ -186,10 +237,12 @@ export class BankingComponent {
   readonly statements = signal<BankStatement[]>([]);
   readonly summary = signal<Summary | null>(null);
   readonly categories = signal<string[]>([]);
+  readonly reconciliation = signal<Reconciliation | null>(null);
   readonly selected = signal<BankStatement | null>(null);
   readonly transactions = signal<BankTransaction[]>([]);
   readonly importing = signal(false);
   readonly uploading = signal(false);
+  readonly reconciling = signal(false);
   readonly error = signal<string | null>(null);
   readonly okMsg = signal<string | null>(null);
 
@@ -203,6 +256,31 @@ export class BankingComponent {
     this.load();
     this.api.get<string[]>('/banking/categories').subscribe({
       next: (items) => this.categories.set(items),
+    });
+    this.loadReconciliation();
+  }
+
+  loadReconciliation() {
+    this.api.get<Reconciliation>('/banking/reconciliation').subscribe({
+      next: (result) => this.reconciliation.set(result),
+    });
+  }
+
+  runReconcile() {
+    this.reconciling.set(true);
+    this.error.set(null);
+    this.okMsg.set(null);
+    this.api.post<{ matched: number; unmatched: number; total: number }>('/banking/reconcile', {}).subscribe({
+      next: (res) => {
+        this.reconciling.set(false);
+        this.okMsg.set(`Conciliação: ${res.matched} casada(s), ${res.unmatched} pendente(s).`);
+        this.load();
+        this.loadReconciliation();
+      },
+      error: (err) => {
+        this.reconciling.set(false);
+        this.error.set(err?.error?.message || 'Falha ao conciliar.');
+      },
     });
   }
 

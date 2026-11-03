@@ -44,6 +44,9 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | POST | `/banking/statements` | Importa colando conteúdo — `{ name, institution?, format: OFX\|CSV, content }` |
 | POST | `/banking/statements/upload` | Importa arquivo (multipart) — OFX/CSV/PDF |
 | POST | `/banking/recategorize` | Reaplica a categorização automática nas transações sem categoria |
+| POST | `/banking/reconcile` | Concilia extrato ↔ carteira (valor + data ±3 dias) |
+| GET | `/banking/reconciliation` | Lista conciliadas e pendentes |
+| POST | `/banking/reconciliation/:id/unlink` | Desfaz a conciliação de uma transação |
 | GET | `/banking/statements/:id` | Transações de um extrato |
 | DELETE | `/banking/statements/:id` | Remove extrato e transações |
 | PATCH | `/banking/transactions/:id` | Altera a categoria — `{ category }` |

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Transaction } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PDFParse } from 'pdf-parse';
 import { ImportStatementDto } from './dto/import-statement.dto';
@@ -41,7 +42,12 @@ export class BankingService {
   async get(tenantId: string, id: string) {
     const statement = await this.prisma.bankStatement.findFirst({
       where: { id, tenantId },
-      include: { transactions: { orderBy: { date: 'asc' } } },
+      include: {
+        transactions: {
+          orderBy: { date: 'asc' },
+          include: { portfolioTransaction: { include: { asset: true } } },
+        },
+      },
     });
     if (!statement) throw new NotFoundException('Extrato não encontrado.');
     return statement;
@@ -82,6 +88,90 @@ export class BankingService {
       });
     }
     return { updated: transactions.length };
+  }
+
+  /** Concilia lançamentos do extrato com transações da carteira (valor + data ±3 dias). */
+  async reconcile(tenantId: string) {
+    const portfolioTransactions = await this.prisma.transaction.findMany({
+      where: { portfolio: { tenantId } },
+    });
+    const bankTransactions = await this.prisma.bankTransaction.findMany({
+      where: { statement: { tenantId }, reconciledAt: null },
+      orderBy: { date: 'asc' },
+    });
+
+    const used = new Set<string>();
+    let matched = 0;
+
+    for (const bank of bankTransactions) {
+      const bankAmount = Number(bank.amount);
+      const candidates = portfolioTransactions.filter((txn) => {
+        if (used.has(txn.id)) return false;
+        const amountMatch = Math.abs(this.cashValue(txn) - bankAmount) <= 0.01;
+        const days = Math.abs(txn.date.getTime() - bank.date.getTime()) / 86_400_000;
+        return amountMatch && days <= 3;
+      });
+
+      // Só concilia quando há exatamente um candidato (evita falso positivo).
+      if (candidates.length !== 1) continue;
+
+      const match = candidates[0];
+      await this.prisma.bankTransaction.update({
+        where: { id: bank.id },
+        data: { portfolioTransactionId: match.id, reconciledAt: new Date() },
+      });
+      used.add(match.id);
+      matched += 1;
+    }
+
+    return {
+      matched,
+      unmatched: bankTransactions.length - matched,
+      total: bankTransactions.length,
+    };
+  }
+
+  async reconciliation(tenantId: string) {
+    const [matched, unmatched] = await Promise.all([
+      this.prisma.bankTransaction.findMany({
+        where: { statement: { tenantId }, reconciledAt: { not: null } },
+        include: { portfolioTransaction: { include: { asset: true } } },
+        orderBy: { date: 'desc' },
+        take: 100,
+      }),
+      this.prisma.bankTransaction.findMany({
+        where: { statement: { tenantId }, reconciledAt: null },
+        orderBy: { date: 'desc' },
+        take: 100,
+      }),
+    ]);
+    return { matched, unmatched };
+  }
+
+  async unreconcile(tenantId: string, id: string) {
+    const transaction = await this.prisma.bankTransaction.findFirst({
+      where: { id, statement: { tenantId } },
+    });
+    if (!transaction) throw new NotFoundException('Transação não encontrada.');
+    return this.prisma.bankTransaction.update({
+      where: { id },
+      data: { portfolioTransactionId: null, reconciledAt: null },
+    });
+  }
+
+  /** Valor de caixa (com sinal) de uma transação da carteira. */
+  private cashValue(txn: Transaction): number {
+    const gross = Number(txn.quantity) * Number(txn.price);
+    const fees = Number(txn.fees);
+    switch (txn.type) {
+      case 'BUY':
+      case 'WITHDRAW':
+        return -(gross + fees);
+      case 'SELL':
+        return gross - fees;
+      default:
+        return gross;
+    }
   }
 
   async import(tenantId: string, dto: ImportStatementDto) {

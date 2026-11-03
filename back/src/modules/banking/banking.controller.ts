@@ -47,6 +47,21 @@ export class BankingController {
     return this.banking.recategorize(tenantId);
   }
 
+  @Post('reconcile')
+  reconcile(@TenantId() tenantId: string) {
+    return this.banking.reconcile(tenantId);
+  }
+
+  @Get('reconciliation')
+  reconciliation(@TenantId() tenantId: string) {
+    return this.banking.reconciliation(tenantId);
+  }
+
+  @Post('reconciliation/:id/unlink')
+  unreconcile(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.banking.unreconcile(tenantId, id);
+  }
+
   @Post('statements')
   import(@TenantId() tenantId: string, @Body() dto: ImportStatementDto) {
     return this.banking.import(tenantId, dto);
