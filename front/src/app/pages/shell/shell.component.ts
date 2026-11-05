@@ -53,6 +53,7 @@ import { InsightsService } from '../../core/insights.service';
           }
         </a>
         <a routerLink="/app/opportunities" routerLinkActive="active">Radar de oportunidades</a>
+        <a routerLink="/app/business" routerLinkActive="active">Oportunidades de negócio</a>
         <a routerLink="/app/portfolio" routerLinkActive="active">Carteira</a>
         <a routerLink="/app/banking" routerLinkActive="active">Extratos</a>
         <a routerLink="/app/analysis" routerLinkActive="active">Análise</a>

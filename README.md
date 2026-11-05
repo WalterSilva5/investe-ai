@@ -35,6 +35,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 - **Memória do agente** (`remember`/`search_memory`) e **notas** (`search_documents`).
 - **Insights periódicos**: dicas geradas por IA a partir de **notícias (RSS)** + **indicadores (Selic/IPCA/CDI)** + **carteira**, com painel dedicado, **filtro por categoria**, **badge de não lidos** e **digest por e-mail**.
 - **Radar de oportunidades**: analisa narrativas (IA, cripto, metaverso, NFTs, chips, energia…) com **atenção, hype risk, estágio do ciclo, riscos, sinais de confirmação/invalidação e regras de saída** — sem recomendar compra/venda.
+- **Oportunidades de negócio**: usa seu perfil (skills, experiência, formação) para gerar caminhos de negócio com **fit, primeiros passos e validação barata**.
 - Quota mensal, histórico de conversas, passos visíveis e auditoria.
 
 ## Stack
@@ -98,6 +99,7 @@ wsi-invest-ai/
 | [API](docs/10-api.md) | referência de endpoints |
 | [Agente de IA](docs/11-agente-de-ia.md) | arquitetura, tools, memória, streaming |
 | [Radar de oportunidades](docs/12-oportunidades.md) | narrativas, ciclo de hype, risco e ética |
+| [Oportunidades de negócio](docs/13-negocios.md) | perfil profissional, tipos de negócio e geração de ideias |
 
 ## Scripts
 

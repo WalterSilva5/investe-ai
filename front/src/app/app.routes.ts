@@ -4,6 +4,7 @@ import { AdminComponent } from './pages/admin/admin.component';
 import { AlertsComponent } from './pages/alerts/alerts.component';
 import { AnalysisComponent } from './pages/analysis/analysis.component';
 import { BankingComponent } from './pages/banking/banking.component';
+import { BusinessComponent } from './pages/business/business.component';
 import { ChatComponent } from './pages/chat/chat.component';
 import { FixedIncomeComponent } from './pages/fixed-income/fixed-income.component';
 import { InsightsComponent } from './pages/insights/insights.component';
@@ -32,6 +33,7 @@ export const routes: Routes = [
       { path: 'overview', component: OverviewComponent },
       { path: 'insights', component: InsightsComponent },
       { path: 'opportunities', component: OpportunitiesComponent },
+      { path: 'business', component: BusinessComponent },
       { path: 'portfolio', component: PortfolioComponent },
       { path: 'banking', component: BankingComponent },
       { path: 'analysis', component: AnalysisComponent },

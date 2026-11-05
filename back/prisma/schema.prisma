@@ -69,6 +69,8 @@ model Tenant {
   insights     Insight[]
   statements   BankStatement[]
   opportunityBriefs OpportunityBrief[]
+  businessProfile BusinessProfile?
+  businessIdeas BusinessIdea[]
 }
 
 model User {
@@ -552,4 +554,41 @@ model OpportunitySnapshot {
 
   @@index([theme, capturedAt])
   @@index([capturedAt])
+}
+
+model BusinessProfile {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  headline       String?
+  summary        String?
+  skills         Json?
+  experience     Json?
+  education      Json?
+  languages      Json?
+  certifications Json?
+  interests      Json?
+  location       String?
+  availability   String?
+  incomeGoal     Decimal?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model BusinessIdea {
+  id         String   @id @default(cuid())
+  tenantId   String
+  kind       String
+  title      String
+  summary    String
+  score      Int      @default(0)
+  content    Json
+  providerId String?
+  model      String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }

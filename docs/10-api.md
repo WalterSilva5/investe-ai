@@ -144,6 +144,16 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/ai/conversations` | Histórico de conversas |
 | GET | `/ai/conversations/:id` | Mensagens de uma conversa |
 
+## Oportunidades de negócio (`/business`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/business/profile` | Perfil profissional |
+| PUT | `/business/profile` | Salva/atualiza o perfil |
+| GET | `/business/catalog` | Tipos de negócio |
+| GET | `/business/ideas` | Ideias geradas |
+| POST | `/business/ideas` | Gera ideias (`{ focus?, kinds? }`) |
+
 ## Radar de oportunidades (`/opportunities`)
 
 | Método | Rota | Descrição |
