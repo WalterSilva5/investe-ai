@@ -542,3 +542,14 @@ model OpportunityBrief {
 
   @@index([tenantId, theme, generatedAt])
 }
+
+model OpportunitySnapshot {
+  id         String   @id @default(cuid())
+  theme      String
+  attention  Int      @default(0)
+  hypeRisk   Int      @default(0)
+  capturedAt DateTime @default(now())
+
+  @@index([theme, capturedAt])
+  @@index([capturedAt])
+}

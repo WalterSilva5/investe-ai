@@ -56,6 +56,27 @@ Ambos mantêm os mesmos limites: sem recomendação de compra/venda, sem preço-
 - Explica como o hype/manipulação costuma funcionar.
 - Inclui disclaimer educacional.
 
+## Rotação de narrativa (tendência)
+
+- A cada dia, o radar registra um **snapshot de atenção** por tema (global, a partir das manchetes).
+- A **tendência** compara o primeiro snapshot da janela de 7 dias com o mais recente: `↑` atenção subindo, `↓` esfriando.
+- Serve para perceber **rotação** (um tema esfriando enquanto outro emerge) — não para prever preço.
+
+## Ciclos passados (lições)
+
+Catálogo educacional com ciclos históricos (cripto 2017/2021, NFTs, metaverso, IA, bolha ponto-com): resumo, **sinais de alerta** e **lições**. O objetivo é reconhecer padrões de euforia e queda.
+
+## Playbook de saída (disciplina)
+
+Framework educacional exibido no painel:
+
+- **Tamanho da posição:** risco máximo por posição e teto por tema.
+- **Take profit parcial:** realizar parte quando a tese se materializa.
+- **Trailing stop:** subir o ponto de saída conforme o preço sobe.
+- **Invalidação da tese:** sair quando o sinal que confirmava a tese desaparece.
+- **Prazo:** definir prazo e reavaliar.
+- **Emoção:** não aumentar posição no prejuízo; não vender tudo no pânico.
+
 ## Como usar
 
 1. Abra **Radar de oportunidades**.
@@ -77,9 +98,10 @@ Ambos mantêm os mesmos limites: sem recomendação de compra/venda, sem preço-
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/opportunities/themes` | Catálogo de temas |
-| GET | `/opportunities/radar` | Atenção + último brief por tema |
+| GET | `/opportunities/cycles` | Ciclos históricos e lições |
+| GET | `/opportunities/radar` | Atenção + tendência + último brief por tema |
 | GET | `/opportunities?theme=` | Briefs gerados |
-| POST | `/opportunities/:theme/analyze` | Gera análise do tema |
+| POST | `/opportunities/:theme/analyze` | Gera análise do tema (`{ mode: growth\|conservative }`) |
 
 ## Referências
 

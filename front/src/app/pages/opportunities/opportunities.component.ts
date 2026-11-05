@@ -8,6 +8,7 @@ interface RadarItem {
   icon: string;
   description: string;
   attention: number;
+  trend?: number;
   headlines: Array<{ title: string; source: string; url: string }>;
   latest: {
     id: string;
@@ -17,6 +18,16 @@ interface RadarItem {
     hypeRisk: number;
     generatedAt: string;
   } | null;
+}
+
+interface Cycle {
+  id: string;
+  theme: string;
+  period: string;
+  title: string;
+  summary: string;
+  warningSigns: string[];
+  lessons: string[];
 }
 
 interface BriefContent {
@@ -84,6 +95,12 @@ interface Brief {
           <div class="hint" style="margin:6px 0">{{ item.description }}</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0">
             <span class="badge off">{{ item.attention }} manchete(s)</span>
+            @if ((item.trend ?? 0) !== 0) {
+              <span class="badge {{ (item.trend ?? 0) > 0 ? 'ok' : 'off' }}">
+                {{ (item.trend ?? 0) > 0 ? '↑' : '↓' }} atenção
+                {{ (item.trend ?? 0) > 0 ? '+' : '' }}{{ item.trend }}
+              </span>
+            }
             @if (item.latest) {
               <span class="badge {{ stageClass(item.latest.stage) }}">
                 {{ stageLabel(item.latest.stage) }}
@@ -102,6 +119,52 @@ interface Brief {
         </div>
       }
     </div>
+
+    <section class="section">
+      <h2>Ciclos passados (lições)</h2>
+      <div class="list">
+        @for (cycle of cycles(); track cycle.id) {
+          <div class="insight">
+            <div class="insight-top">
+              <span class="badge off">{{ cycle.theme }} · {{ cycle.period }}</span>
+            </div>
+            <div class="insight-title">{{ cycle.title }}</div>
+            <div class="insight-body">{{ cycle.summary }}</div>
+            <div class="grid-2" style="margin-top:8px">
+              <div>
+                <div class="small muted"><strong>Sinais de alerta</strong></div>
+                <ul class="small">
+                  @for (sign of cycle.warningSigns; track $index) {
+                    <li>{{ sign }}</li>
+                  }
+                </ul>
+              </div>
+              <div>
+                <div class="small muted"><strong>Lições</strong></div>
+                <ul class="small">
+                  @for (lesson of cycle.lessons; track $index) {
+                    <li>{{ lesson }}</li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Playbook de saída (disciplina)</h2>
+      <div class="list">
+        <div class="row"><div><div class="name">Tamanho da posição</div><div class="meta">Risco máximo por posição (ex.: 1–2% do patrimônio) e teto por tema (ex.: 10%).</div></div></div>
+        <div class="row"><div><div class="name">Take profit parcial</div><div class="meta">Realizar parte quando a tese inicial se materializar; não tentar "o topo".</div></div></div>
+        <div class="row"><div><div class="name">Trailing stop</div><div class="meta">Subir o ponto de saída conforme o preço sobe, protegendo o lucro.</div></div></div>
+        <div class="row"><div><div class="name">Invalidação da tese</div><div class="meta">Sair se o sinal que confirmava a tese desaparecer — sem esperar "voltar".</div></div></div>
+        <div class="row"><div><div class="name">Prazo</div><div class="meta">Definir prazo; se a tese não se materializar, reavaliar.</div></div></div>
+        <div class="row"><div><div class="name">Emoção</div><div class="meta">Não aumentar posição no prejuízo por vingança; não vender tudo no pânico.</div></div></div>
+      </div>
+      <p class="disclaimer">Framework educacional. Não é recomendação de investimento.</p>
+    </section>
 
     @if (brief()) {
       <section class="section">
@@ -214,6 +277,7 @@ export class OpportunitiesComponent {
   private readonly api = inject(ApiService);
 
   readonly radar = signal<RadarItem[]>([]);
+  readonly cycles = signal<Cycle[]>([]);
   readonly brief = signal<Brief | null>(null);
   readonly analyzing = signal<string | null>(null);
   readonly error = signal<string | null>(null);
@@ -222,6 +286,13 @@ export class OpportunitiesComponent {
 
   constructor() {
     this.loadRadar();
+    this.loadCycles();
+  }
+
+  loadCycles() {
+    this.api.get<Cycle[]>('/opportunities/cycles').subscribe({
+      next: (items) => this.cycles.set(items),
+    });
   }
 
   onModeChange(event: Event) {

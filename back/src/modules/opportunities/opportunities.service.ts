@@ -8,6 +8,7 @@ import {
   OpportunityTheme,
   findOpportunityTheme,
 } from './opportunity-themes';
+import { OPPORTUNITY_CYCLES } from './opportunity-cycles';
 
 const BASE_PROMPT = `Você é um analista de narrativas e ciclos de mercado. Sua função é ajudar um investidor a ENTENDER uma "oportunidade" (tema/narrativa) e o estágio do ciclo — não a recomendar compra ou venda.
 
@@ -84,6 +85,10 @@ export class OpportunitiesService {
     }));
   }
 
+  cycles() {
+    return OPPORTUNITY_CYCLES;
+  }
+
   list(tenantId: string, theme?: string) {
     return this.prisma.opportunityBrief.findMany({
       where: { tenantId, ...(theme ? { theme } : {}) },
@@ -107,7 +112,7 @@ export class OpportunitiesService {
       if (!latestByTheme.has(brief.theme)) latestByTheme.set(brief.theme, brief);
     }
 
-    return OPPORTUNITY_THEMES.map((theme) => {
+    const items = OPPORTUNITY_THEMES.map((theme) => {
       const matches = headlines.filter((headline) => this.matchesTheme(headline.title, theme));
       const latest = latestByTheme.get(theme.slug);
       return {
@@ -133,6 +138,45 @@ export class OpportunitiesService {
           : null,
       };
     });
+
+    await this.recordSnapshots(items);
+    const trends = await this.trends();
+
+    return items.map((item) => ({ ...item, trend: trends[item.slug] ?? 0 }));
+  }
+
+  /** Registra um snapshot por dia (atenção global de notícias). */
+  private async recordSnapshots(items: Array<{ slug: string; attention: number }>) {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const existing = await this.prisma.opportunitySnapshot.findFirst({
+      where: { capturedAt: { gte: startOfDay } },
+    });
+    if (existing) return;
+    await this.prisma.opportunitySnapshot.createMany({
+      data: items.map((item) => ({ theme: item.slug, attention: item.attention })),
+    });
+  }
+
+  /** Tendência de atenção: diferença entre o primeiro e o último snapshot (7 dias). */
+  private async trends(): Promise<Record<string, number>> {
+    const since = new Date(Date.now() - 7 * 86_400_000);
+    const snapshots = await this.prisma.opportunitySnapshot.findMany({
+      where: { capturedAt: { gte: since } },
+      orderBy: { capturedAt: 'asc' },
+    });
+    const byTheme = new Map<string, { first: number; last: number }>();
+    for (const snapshot of snapshots) {
+      const entry = byTheme.get(snapshot.theme);
+      if (!entry) {
+        byTheme.set(snapshot.theme, { first: snapshot.attention, last: snapshot.attention });
+      } else {
+        entry.last = snapshot.attention;
+      }
+    }
+    const result: Record<string, number> = {};
+    for (const [theme, value] of byTheme) result[theme] = value.last - value.first;
+    return result;
   }
 
   async analyze(tenantId: string, themeSlug: string, mode = 'growth') {

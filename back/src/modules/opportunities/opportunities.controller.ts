@@ -17,6 +17,11 @@ export class OpportunitiesController {
     return this.opportunities.themes();
   }
 
+  @Get('cycles')
+  cycles() {
+    return this.opportunities.cycles();
+  }
+
   @Get('radar')
   radar(@TenantId() tenantId: string) {
     return this.opportunities.radar(tenantId);

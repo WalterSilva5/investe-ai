@@ -149,9 +149,10 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/opportunities/themes` | Catálogo de temas/narrativas |
-| GET | `/opportunities/radar` | Atenção + último brief por tema |
+| GET | `/opportunities/cycles` | Ciclos históricos e lições |
+| GET | `/opportunities/radar` | Atenção + tendência + último brief por tema |
 | GET | `/opportunities?theme=` | Briefs gerados |
-| POST | `/opportunities/:theme/analyze` | Gera análise do tema |
+| POST | `/opportunities/:theme/analyze` | Gera análise (`{ mode: growth\|conservative }`) |
 
 ## Insights de IA (`/insights`)
 

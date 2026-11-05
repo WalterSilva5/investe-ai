@@ -3,6 +3,11 @@ import { OpportunitiesService } from './opportunities.service';
 describe('OpportunitiesService', () => {
   const prisma = {
     opportunityBrief: { findMany: jest.fn(), create: jest.fn() },
+    opportunitySnapshot: {
+      findFirst: jest.fn(),
+      createMany: jest.fn(),
+      findMany: jest.fn(),
+    },
   };
   const registry = { resolve: jest.fn() };
   const macro = { getMacro: jest.fn() };
@@ -17,6 +22,9 @@ describe('OpportunitiesService', () => {
       .mockRejectedValue(new Error('no network')) as unknown as typeof fetch;
     macro.getMacro.mockResolvedValue({ selic: 14, ipcaMonthly: 0.5 });
     news.headlines.mockResolvedValue([]);
+    prisma.opportunitySnapshot.findFirst.mockResolvedValue(null);
+    prisma.opportunitySnapshot.createMany.mockResolvedValue({ count: 9 });
+    prisma.opportunitySnapshot.findMany.mockResolvedValue([]);
     service = new OpportunitiesService(
       prisma as never,
       registry as never,
