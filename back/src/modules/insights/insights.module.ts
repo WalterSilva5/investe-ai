@@ -11,6 +11,6 @@ import { NewsService } from './news.service';
   imports: [AiProviderModule, MailModule, MarketModule, PortfoliosModule],
   controllers: [InsightsController],
   providers: [InsightsService, NewsService],
-  exports: [InsightsService],
+  exports: [InsightsService, NewsService],
 })
 export class InsightsModule {}

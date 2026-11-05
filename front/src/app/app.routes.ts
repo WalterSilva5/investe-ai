@@ -12,6 +12,7 @@ import { ForgotPasswordComponent } from './pages/forgot-password/forgot-password
 import { SecurityComponent } from './pages/security/security.component';
 import { MemoriesComponent } from './pages/memories/memories.component';
 import { NotesComponent } from './pages/notes/notes.component';
+import { OpportunitiesComponent } from './pages/opportunities/opportunities.component';
 import { OverviewComponent } from './pages/overview/overview.component';
 import { PortfolioComponent } from './pages/portfolio/portfolio.component';
 import { SettingsComponent } from './pages/settings/settings.component';
@@ -30,6 +31,7 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'overview' },
       { path: 'overview', component: OverviewComponent },
       { path: 'insights', component: InsightsComponent },
+      { path: 'opportunities', component: OpportunitiesComponent },
       { path: 'portfolio', component: PortfolioComponent },
       { path: 'banking', component: BankingComponent },
       { path: 'analysis', component: AnalysisComponent },

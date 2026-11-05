@@ -88,6 +88,7 @@
 | `ai` | ✅ chat com tools (carteira/macro/renda fixa/notas/memória/runway/projeção/rebalance), streaming (SSE), citações, passos, quota mensal, histórico, uso e auditoria |
 | `insights` | ✅ dicas de IA (notícias RSS + macro + carteira), painel com filtro por categoria, badge de não lidos, digest por e-mail e cron diário |
 | `banking` | ✅ importação de extratos (OFX/CSV/PDF, upload ou colar), categorização automática, resumo (entradas/saídas/saldo por mês e categoria), conciliação com a carteira |
+| `opportunities` | ✅ radar de narrativas (atenção, hype risk, estágio do ciclo, riscos e regras de saída) |
 | `tenants` | ✅ lista + criação de workspaces (empresa/PJ com CNPJ) vinculados à mesma conta |
 | `audit` | 🟡 gravação de eventos de IA; tela depois |
 | `analysis` | ✅ runway, projeção e rebalanceamento |

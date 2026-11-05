@@ -144,6 +144,15 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/ai/conversations` | Histórico de conversas |
 | GET | `/ai/conversations/:id` | Mensagens de uma conversa |
 
+## Radar de oportunidades (`/opportunities`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/opportunities/themes` | Catálogo de temas/narrativas |
+| GET | `/opportunities/radar` | Atenção + último brief por tema |
+| GET | `/opportunities?theme=` | Briefs gerados |
+| POST | `/opportunities/:theme/analyze` | Gera análise do tema |
+
 ## Insights de IA (`/insights`)
 
 | Método | Rota | Descrição |

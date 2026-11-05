@@ -68,6 +68,7 @@ model Tenant {
   memories     Memory[]
   insights     Insight[]
   statements   BankStatement[]
+  opportunityBriefs OpportunityBrief[]
 }
 
 model User {
@@ -520,4 +521,24 @@ model BankTransaction {
 
   @@index([statementId, date])
   @@index([portfolioTransactionId])
+}
+
+model OpportunityBrief {
+  id          String   @id @default(cuid())
+  tenantId    String
+  theme       String
+  title       String
+  stage       String   @default("EMERGENTE")
+  mode        String   @default("growth")
+  attention   Int      @default(0)
+  hypeRisk    Int      @default(0)
+  content     Json
+  sources     Json?
+  providerId  String?
+  model       String?
+  generatedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, theme, generatedAt])
 }

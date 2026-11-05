@@ -52,6 +52,7 @@ import { InsightsService } from '../../core/insights.service';
             <span class="nav-badge">{{ insights.unread() }}</span>
           }
         </a>
+        <a routerLink="/app/opportunities" routerLinkActive="active">Radar de oportunidades</a>
         <a routerLink="/app/portfolio" routerLinkActive="active">Carteira</a>
         <a routerLink="/app/banking" routerLinkActive="active">Extratos</a>
         <a routerLink="/app/analysis" routerLinkActive="active">Análise</a>
