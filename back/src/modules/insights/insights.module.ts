@@ -3,12 +3,13 @@ import { AiProviderModule } from '../ai-provider/ai-provider.module';
 import { MailModule } from '../mail/mail.module';
 import { MarketModule } from '../market/market.module';
 import { PortfoliosModule } from '../portfolios/portfolios.module';
+import { DocumentsModule } from '../documents/documents.module';
 import { InsightsController } from './insights.controller';
 import { InsightsService } from './insights.service';
 import { NewsService } from './news.service';
 
 @Module({
-  imports: [AiProviderModule, MailModule, MarketModule, PortfoliosModule],
+  imports: [AiProviderModule, MailModule, MarketModule, PortfoliosModule, DocumentsModule],
   controllers: [InsightsController],
   providers: [InsightsService, NewsService],
   exports: [InsightsService, NewsService],

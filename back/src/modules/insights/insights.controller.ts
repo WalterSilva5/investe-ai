@@ -27,6 +27,11 @@ export class InsightsController {
     return this.insights.refresh(tenantId);
   }
 
+  @Post('diary')
+  diary(@TenantId() tenantId: string) {
+    return this.insights.diary(tenantId);
+  }
+
   @Post('read-all')
   markAllRead(@TenantId() tenantId: string) {
     return this.insights.markAllRead(tenantId);

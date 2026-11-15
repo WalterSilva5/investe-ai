@@ -1,7 +1,7 @@
 import { AnalysisService } from './analysis.service';
 
 describe('AnalysisService', () => {
-  const service = new AnalysisService({} as never);
+  const service = new AnalysisService({} as never, {} as never, {} as never);
 
   it('projeta valor futuro com aportes', () => {
     const result = service.project({

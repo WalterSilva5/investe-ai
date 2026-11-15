@@ -28,12 +28,34 @@ export class AuthService {
   readonly user = signal<AuthUser | null>(this.readUser());
   readonly tenantId = signal<string | null>(localStorage.getItem('wsi.tenantId'));
   readonly memberships = signal<Membership[]>([]);
-  readonly isAuthenticated = computed(() => Boolean(this.user() && this.tenantId()));
+  /** Modo local (LOCAL_MODE=true no back): sem cadastro/login. */
+  readonly localMode = signal(false);
+  readonly isAuthenticated = computed(
+    () => this.localMode() || Boolean(this.user() && this.tenantId()),
+  );
 
   constructor() {
+    this.checkLocalMode();
     if (localStorage.getItem('wsi.accessToken')) {
       this.refreshSession();
     }
+  }
+
+  /** Consulta /health (público) para saber se o back está em modo local. */
+  checkLocalMode() {
+    this.api.get<{ localMode: boolean }>('/health').subscribe({
+      next: (res) => {
+        if (res?.localMode) {
+          this.localMode.set(true);
+          if (!this.user()) {
+            const localUser: AuthUser = { id: 'local', email: 'local@wsi.local', name: 'Local' };
+            this.user.set(localUser);
+          }
+          this.refreshMemberships();
+        }
+      },
+      error: () => undefined,
+    });
   }
 
   login(email: string, password: string) {
@@ -67,7 +89,8 @@ export class AuthService {
     this.api.get<Membership[]>('/tenants').subscribe({
       next: (memberships) => {
         this.memberships.set(memberships);
-        if (!localStorage.getItem('wsi.tenantId') && memberships.length) {
+        const current = localStorage.getItem('wsi.tenantId');
+        if (memberships.length && (!current || !memberships.some((m) => m.tenantId === current))) {
           this.selectTenant(memberships[0].tenantId);
         }
       },
@@ -92,7 +115,10 @@ export class AuthService {
           this.selectTenant(me.memberships[0].tenantId);
         }
       },
-      error: () => this.logout(),
+      error: () => {
+        // Em modo local o /auth/me não exige sessão; não derruba o acesso.
+        if (!this.localMode()) this.logout();
+      },
     });
   }
 

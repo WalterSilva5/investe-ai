@@ -14,6 +14,7 @@ const CATEGORIES: Category[] = [
   { key: 'ACOES', label: 'Ações' },
   { key: 'CRIPTO', label: 'Cripto' },
   { key: 'CARTEIRA', label: 'Carteira' },
+  { key: 'DIARIO', label: 'Diário' },
   { key: 'GERAL', label: 'Geral' },
 ];
 
@@ -77,10 +78,14 @@ const CATEGORIES: Category[] = [
             @if (insight.sources?.length) {
               <div class="insight-sources">
                 <span class="muted small">Fontes:</span>
-                @for (source of insight.sources; track source.url) {
-                  <a [href]="source.url" target="_blank" rel="noopener">
-                    {{ source.source || source.title }}
-                  </a>
+                @for (source of insight.sources; track source.url || source.title) {
+                  @if (source.url) {
+                    <a [href]="source.url" target="_blank" rel="noopener">
+                      {{ source.source || source.title }}
+                    </a>
+                  } @else {
+                    <span class="muted small">📝 {{ source.title }}</span>
+                  }
                 }
               </div>
             }
@@ -158,6 +163,7 @@ export class InsightsComponent {
       ACOES: 'Ações',
       CRIPTO: 'Cripto',
       CARTEIRA: 'Carteira',
+      DIARIO: 'Diário',
       GERAL: 'Geral',
     };
     return labels[category] || 'Geral';

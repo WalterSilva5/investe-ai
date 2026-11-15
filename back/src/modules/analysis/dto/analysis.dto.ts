@@ -1,5 +1,14 @@
 import { IsNumber, IsObject, IsOptional, Min } from 'class-validator';
 
+export class ContributionDto {
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+
+  @IsObject()
+  target: Record<string, number>;
+}
+
 export class RunwayDto {
   @IsNumber()
   @Min(0)

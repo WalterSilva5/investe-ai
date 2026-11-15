@@ -1,7 +1,16 @@
 import { SlicePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
+
+interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
 
 interface Note {
   id: string;
@@ -9,23 +18,38 @@ interface Note {
   body: string;
   tags?: string;
   updatedAt: string;
+  attachments?: Attachment[];
 }
 
 @Component({
   selector: 'app-notes',
-  imports: [FormsModule, SlicePipe],
+  imports: [FormsModule, SlicePipe, RouterLink],
   template: `
-    <h1 class="page-title">Notas</h1>
+    <h1 class="page-title">Diário</h1>
     <p class="page-sub">
-      Registre decisões, planos e aprendizados. O agente consulta estas notas pela ferramenta de busca.
+      Anote todo dia: decisões, observações de mercado, boletos, ideias. Anexe PDFs e textos.
+      O botão de dicas gera orientações a partir das suas anotações (categoria Diário nos Insights).
     </p>
+
+    <div class="toolbar">
+      <div class="group">
+        <button class="btn" (click)="generateDiary()" [disabled]="generating()">
+          {{ generating() ? 'Gerando dicas…' : 'Gerar dicas do diário' }}
+        </button>
+        <a routerLink="/app/insights" class="btn secondary">Ver insights</a>
+      </div>
+    </div>
+
+    @if (diaryMessage()) {
+      <div class="alert" [class.ok]="diaryOk()" [class.error]="!diaryOk()">{{ diaryMessage() }}</div>
+    }
 
     <div class="grid-2">
       <section class="card">
-        <h3>Nova nota</h3>
+        <h3>Nova anotação</h3>
         <div class="field">
           <label>Título</label>
-          <input class="input" [(ngModel)]="form.title" placeholder="Ex.: política de investimento" />
+          <input class="input" [(ngModel)]="form.title" placeholder="Ex.: 15/11 — aportes e CDI" />
         </div>
         <div class="field">
           <label>Tags</label>
@@ -35,7 +59,7 @@ interface Note {
           <label>Conteúdo</label>
           <textarea class="input" rows="8" [(ngModel)]="form.body" placeholder="Escreva aqui…"></textarea>
         </div>
-        <button class="btn" style="margin-top:14px" (click)="create()">Salvar nota</button>
+        <button class="btn" style="margin-top:14px" (click)="create()">Salvar anotação</button>
         @if (message()) {
           <div class="alert ok">{{ message() }}</div>
         }
@@ -43,7 +67,7 @@ interface Note {
 
       <section class="card">
         <div style="display:flex;gap:10px;align-items:center;justify-content:space-between">
-          <h3>Suas notas</h3>
+          <h3>Suas anotações</h3>
           <div style="display:flex;gap:8px">
             <input class="input" style="max-width:200px" [(ngModel)]="query" placeholder="buscar…" />
             <button class="btn secondary" (click)="search()">Buscar</button>
@@ -64,9 +88,40 @@ interface Note {
                 <button class="btn secondary" (click)="remove(note.id)">Excluir</button>
               </div>
               <p class="small muted" style="margin:8px 0 0">{{ note.body | slice:0:240 }}</p>
+
+              @if (note.attachments?.length) {
+                <div class="chips" style="margin-top:10px">
+                  @for (att of note.attachments; track att.id) {
+                    <span class="chip" title="{{ att.mimeType }} · {{ att.size }} bytes">
+                      {{ att.filename | slice:0:28 }}
+                      <a
+                        href="javascript:void(0)"
+                        (click)="download(note.id, att)"
+                        style="margin-left:6px"
+                      >baixar</a>
+                      <a
+                        href="javascript:void(0)"
+                        (click)="removeAttachment(note.id, att.id)"
+                        style="margin-left:6px"
+                      >x</a>
+                    </span>
+                  }
+                </div>
+              }
+              <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.md,.markdown,.csv"
+                  (change)="upload(note.id, $event)"
+                  [disabled]="uploading() === note.id"
+                />
+                @if (uploading() === note.id) {
+                  <span class="muted small">Enviando…</span>
+                }
+              </div>
             </div>
           } @empty {
-            <p class="muted small">Nenhuma nota.</p>
+            <p class="muted small">Nenhuma anotação.</p>
           }
         </div>
       </section>
@@ -78,6 +133,10 @@ export class NotesComponent {
 
   readonly notes = signal<Note[]>([]);
   readonly message = signal<string | null>(null);
+  readonly diaryMessage = signal<string | null>(null);
+  readonly diaryOk = signal(false);
+  readonly generating = signal(false);
+  readonly uploading = signal<string | null>(null);
 
   form = { title: '', tags: '', body: '' };
   query = '';
@@ -111,7 +170,7 @@ export class NotesComponent {
       })
       .subscribe({
         next: () => {
-          this.message.set('Nota salva.');
+          this.message.set('Anotação salva.');
           this.form = { title: '', tags: '', body: '' };
           this.load();
         },
@@ -121,5 +180,64 @@ export class NotesComponent {
 
   remove(id: string) {
     this.api.delete(`/documents/${id}`).subscribe({ next: () => this.load() });
+  }
+
+  upload(noteId: string, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.uploading.set(noteId);
+    const data = new FormData();
+    data.append('file', file, file.name);
+    this.api.postFormData(`/documents/${noteId}/attachments`, data).subscribe({
+      next: () => {
+        this.uploading.set(null);
+        this.load();
+      },
+      error: (err) => {
+        this.uploading.set(null);
+        this.diaryMessage.set(err?.error?.message || 'Falha no upload.');
+        this.diaryOk.set(false);
+      },
+    });
+    input.value = '';
+  }
+
+  download(noteId: string, att: Attachment) {
+    this.api.getBlob(`/documents/${noteId}/attachments/${att.id}/download`).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = att.filename;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+    });
+  }
+
+  removeAttachment(noteId: string, attachmentId: string) {
+    this.api.delete(`/documents/${noteId}/attachments/${attachmentId}`).subscribe({
+      next: () => this.load(),
+    });
+  }
+
+  generateDiary() {
+    this.generating.set(true);
+    this.diaryMessage.set(null);
+    this.api.post<{ generated: number }>('/insights/diary', {}).subscribe({
+      next: (res) => {
+        this.generating.set(false);
+        this.diaryOk.set(true);
+        this.diaryMessage.set(
+          `${res.generated} dica(s) do diário gerada(s). Veja na categoria Diário dos Insights.`,
+        );
+      },
+      error: (err) => {
+        this.generating.set(false);
+        this.diaryOk.set(false);
+        this.diaryMessage.set(err?.error?.message || 'Não foi possível gerar as dicas.');
+      },
+    });
   }
 }

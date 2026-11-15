@@ -123,6 +123,7 @@ Dicas geradas por IA a partir de **dados obtidos online**, sem intervenção do 
 - **Entradas:** macro (Selic/IPCA/CDI via BCB) + câmbio/ouro (USD/EUR/GBP + XAU) + cotações/carteira + **manchetes de notícias via RSS** (InfoMoney, Exame, Agência Brasil, CoinDesk, The Block; lista configurável em `INSIGHT_NEWS_FEEDS`).
 - **Geração:** o provedor configurado produz de 3 a 5 insights com categoria (`MACRO`, `RENDA_FIXA`, `ACOES`, `CRIPTO`, `CARTEIRA`), título, texto e **fontes** (links das notícias usadas).
 - **Cadência:** cron diário (dias úteis 8h, `ENABLE_CRON`) + gatilho manual `POST /api/insights/refresh`.
+- **Persistência e retenção:** insights salvos no SQLite por tenant (`GET /insights` lê do banco — recarregar a página não gasta tokens); cada geração poda o excedente, mantendo os 50 mais recentes.
 - **Notificação:** badge de não lidos na barra lateral + painel dedicado com filtro por categoria; digest por **e-mail** (via SMTP, opcional em `SMTP_*`) enviado no cron aos membros `OWNER`/`ADMIN`.
 - **Guarda:** mesmo conjunto de regras do chat (sem recomendação de compra/venda, sem prever preço, tom educacional); resposta validada como JSON e persistida em `Insight`.
 

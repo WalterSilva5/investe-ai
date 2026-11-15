@@ -1,13 +1,48 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LocalModeService } from '../../common/local-mode.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 
 @Injectable()
 export class TenantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly localMode: LocalModeService,
+  ) {}
 
-  listForUser(userId: string) {
+  async listForUser(userId: string) {
+    // Modo local: lista todos os workspaces (usuário único, sem login),
+    // garantindo o vínculo para o seletor do menu.
+    if (this.localMode.isEnabled()) {
+      const ctx = await this.localMode.ensureLocalContext();
+      const tenants = await this.prisma.tenant.findMany({ orderBy: { createdAt: 'asc' } });
+      await Promise.all(
+        tenants.map((t) =>
+          this.prisma.membership.upsert({
+            where: { userId_tenantId: { userId: ctx.userId, tenantId: t.id } },
+            create: { userId: ctx.userId, tenantId: t.id, role: 'OWNER' },
+            update: {},
+          }),
+        ),
+      );
+      return this.prisma.membership.findMany({
+        where: { userId: ctx.userId },
+        include: {
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              plan: true,
+              kind: true,
+              cnpj: true,
+            },
+          },
+        },
+        orderBy: { tenant: { createdAt: 'asc' } },
+      });
+    }
     return this.prisma.membership.findMany({
       where: { userId },
       include: {

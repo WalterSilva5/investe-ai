@@ -438,7 +438,26 @@ model Document {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  attachments DocumentAttachment[]
+
   @@index([tenantId, createdAt])
+}
+
+model DocumentAttachment {
+  id          String   @id @default(cuid())
+  documentId  String
+  tenantId    String
+  filename    String
+  mimeType    String
+  size        Int
+  storagePath String
+  textContent String?
+  createdAt   DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([tenantId])
 }
 
 model Token {

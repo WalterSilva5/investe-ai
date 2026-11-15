@@ -86,7 +86,7 @@ export class OpenAICompatibleProvider {
     }));
 
     return {
-      content: message?.content ?? '',
+      content: this.extractText((message as { content?: unknown } | undefined)?.content),
       model: response.model || model,
       tokensIn: response.usage?.prompt_tokens ?? 0,
       tokensOut: response.usage?.completion_tokens ?? 0,
@@ -94,6 +94,32 @@ export class OpenAICompatibleProvider {
       finishReason: choice?.finish_reason,
       assistantMessage: message,
     };
+  }
+
+  /**
+   * Extrai texto de `message.content`, que pode vir como string,
+   * array de partes (alguns gateways) ou null.
+   */
+  private extractText(content: unknown): string {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => {
+          if (typeof part === 'string') return part;
+          if (part && typeof part === 'object') {
+            const p = part as Record<string, unknown>;
+            if (typeof p['text'] === 'string') return p['text'] as string;
+            const nested = p['text'];
+            if (nested && typeof nested === 'object') {
+              const value = (nested as Record<string, unknown>)['value'];
+              if (typeof value === 'string') return value;
+            }
+          }
+          return '';
+        })
+        .join('');
+    }
+    return '';
   }
 
   async *streamChat(

@@ -41,7 +41,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 ## Stack
 
 - **Back:** NestJS 11 · Prisma 6 · SQLite · Swagger.
-- **Front:** Angular 20 · Tailwind · NgRx (parcial) · ngx-charts.
+- **Front:** Angular 20 · PrimeNG 20 (Aura) · ECharts (ngx-echarts) · primeicons.
 - **IA:** OpenAI SDK (adaptador compatible), SSE.
 - **Infra:** local-first, sem Docker (SQLite em arquivo).
 

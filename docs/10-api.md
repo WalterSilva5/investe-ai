@@ -110,11 +110,15 @@ Documentação interativa: `GET /api/docs` (Swagger).
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/documents` | Lista notas |
+| GET | `/documents` | Lista notas (com anexos) |
 | POST | `/documents` | Cria nota |
 | GET | `/documents/search?q=` | Busca textual |
 | GET | `/documents/:id` | Detalhe |
-| DELETE | `/documents/:id` | Remove |
+| DELETE | `/documents/:id` | Remove (apaga anexos do disco) |
+| POST | `/documents/:id/attachments` | Upload PDF/TXT/MD/CSV (8 MB, multipart `file`; texto extraído p/ o agente) |
+| GET | `/documents/:id/attachments` | Lista anexos |
+| GET | `/documents/:id/attachments/:attachmentId/download` | Baixa anexo |
+| DELETE | `/documents/:id/attachments/:attachmentId` | Remove anexo |
 | GET | `/memories` | Lista memórias do agente |
 | POST | `/memories` | Cria memória (kind/importance) |
 | GET | `/memories/search?q=` | Busca |
@@ -127,6 +131,8 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | POST | `/analysis/runway` | Meses que o patrimônio sustenta a despesa |
 | POST | `/analysis/project` | Projeção de valor futuro |
 | POST | `/analysis/rebalance` | Desvio da alocação vs. meta |
+| POST | `/analysis/contribution` | Mapa do aporte: distribui o valor priorizando a defasagem vs. meta (determinístico, sem IA) |
+| POST | `/analysis/contribution/advice` | Mapa + comentário do agente com base nas dicas (gasta tokens, não é salvo) |
 
 ## IA (`/ai`, `/ai/providers`)
 
@@ -170,7 +176,8 @@ Documentação interativa: `GET /api/docs` (Swagger).
 |---|---|---|
 | GET | `/insights` | Lista os insights (filtro opcional `?category=`) |
 | GET | `/insights/unread-count` | Conta insights não lidos |
-| POST | `/insights/refresh` | Gera novos insights (notícias + macro + carteira) |
+| POST | `/insights/refresh` | Gera novos insights (notícias + macro + carteira); poda além dos 50 recentes (`{generated, pruned}`) |
+| POST | `/insights/diary` | Dicas do diário (categoria DIARIO) a partir das notas + anexos; manual, não entra no cron |
 | POST | `/insights/read-all` | Marca todos como lidos |
 | PATCH | `/insights/:id/read` | Marca um insight como lido |
 

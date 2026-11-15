@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Insight } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
@@ -7,6 +7,7 @@ import { FxService } from '../market/fx.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
 import { MailService } from '../mail/mail.service';
 import { NewsItem, NewsService } from './news.service';
+import { DocumentsService } from '../documents/documents.service';
 
 const INSIGHT_PROMPT = `Você gera "insights" diários para um investidor pessoa física no Brasil.
 Regras obrigatórias:
@@ -18,6 +19,16 @@ Regras obrigatórias:
 Responda APENAS um JSON válido (sem markdown, sem comentários) com um array de 3 a 5 objetos:
 [{"category":"MACRO|RENDA_FIXA|ACOES|CRIPTO|CARTEIRA","title":"...","content":"...","relatedSources":[0,2]}]
 "relatedSources" são os índices (base 0) das notícias usadas no insight.`;
+
+const DIARY_PROMPT = `Você gera "dicas do diário" a partir das anotações de um investidor pessoa física no Brasil.
+Regras obrigatórias:
+- Use APENAS o que está nas anotações (texto e anexos). Nunca invente números ou fatos.
+- NÃO recomende compra ou venda, NÃO preveja preço, NÃO prometa retorno.
+- Tom educacional; deixe claro que não é recomendação de investimento.
+- Cada dica deve referenciar a anotação que a originou e sugerir um próximo passo prático e barato (observar, anotar, comparar, revisar).
+
+Responda APENAS um JSON válido (sem markdown, sem comentários) com um array de 2 a 4 objetos:
+[{"title":"...","content":"..."}]`;
 
 interface RawInsight {
   category?: string;
@@ -32,6 +43,7 @@ const CATEGORIES: Record<string, string> = {
   ACOES: 'ACOES',
   CRIPTO: 'CRIPTO',
   CARTEIRA: 'CARTEIRA',
+  DIARIO: 'DIARIO',
   GERAL: 'GERAL',
 };
 
@@ -47,6 +59,7 @@ export class InsightsService {
     private readonly fx: FxService,
     private readonly news: NewsService,
     private readonly mail: MailService,
+    private readonly documents: DocumentsService,
   ) {}
 
   list(tenantId: string, category?: string) {
@@ -109,11 +122,21 @@ export class InsightsService {
           content: `Contexto de hoje (${new Date().toISOString()}):\n${JSON.stringify(context)}`,
         },
       ],
-      { model: resolved.model, temperature: 0.4, maxTokens: 1400 },
+      // Orçamento folgado: modelos com raciocínio consomem tokens antes do
+      // conteúdo; com limite curto a resposta vinha vazia (finishReason=length).
+      { model: resolved.model, temperature: 0.4, maxTokens: 4000 },
     );
 
     const raw = this.parseJson(result.content);
     if (!raw.length) {
+      if (!result.content?.trim()) {
+        this.logger.warn(
+          `Provedor ${resolved.providerId}/${resolved.model} retornou conteúdo vazio (finishReason=${result.finishReason}). Nenhum insight salvo.`,
+        );
+        throw new BadRequestException(
+          'O provedor de IA retornou resposta vazia. Tente novamente ou troque o modelo em Provedores de IA.',
+        );
+      }
       raw.push({
         category: 'GERAL',
         title: 'Insight do dia',
@@ -137,6 +160,8 @@ export class InsightsService {
       ),
     );
 
+    const pruned = await this.prune(tenantId);
+
     let email: { sent: boolean; reason?: string } | undefined;
     if (notifyEmail) {
       email = await this.sendDigest(tenantId, created);
@@ -144,10 +169,94 @@ export class InsightsService {
 
     return {
       generated: created.length,
+      pruned,
       providerId: resolved.providerId,
       model: resolved.model,
       ...(email ? { email } : {}),
     };
+  }
+
+  /**
+   * Retenção: mantém só os insights mais recentes por tenant.
+   * Evita acúmulo (cada refresh/cron anexa linhas) sem apagar o
+   * histórico recente — recarregar a página só lê o banco, sem
+   * gastar tokens de IA.
+   */
+  async prune(tenantId: string, keep = InsightsService.MAX_KEPT): Promise<number> {
+    const latest = await this.prisma.insight.findMany({
+      where: { tenantId },
+      orderBy: [{ generatedAt: 'desc' }, { id: 'desc' }],
+      take: keep,
+      select: { id: true },
+    });
+    if (!latest.length) return 0;
+    const deleted = await this.prisma.insight.deleteMany({
+      where: { tenantId, id: { notIn: latest.map((i) => i.id) } },
+    });
+    return deleted.count;
+  }
+
+  private static readonly MAX_KEPT = 50;
+
+  /**
+   * Dicas do diário (botão manual): gera insights com categoria DIARIO
+   * a partir das notas recentes do usuário + texto dos anexos.
+   * Não entra no cron — só gasta tokens quando solicitado.
+   */
+  async diary(tenantId: string) {
+    const notes = await this.documents.recentWithAttachments(tenantId, 10);
+    const withContent = notes.filter(
+      (n) => n.body?.trim() || n.attachments.length,
+    );
+    if (!withContent.length) {
+      throw new BadRequestException(
+        'Registre ao menos uma nota no Diário para gerar dicas.',
+      );
+    }
+
+    const resolved = await this.registry.resolve(tenantId);
+    const result = await resolved.provider.chat(
+      [
+        { role: 'system', content: DIARY_PROMPT },
+        {
+          role: 'user',
+          content: `Minhas anotações:\n${JSON.stringify(withContent)}`,
+        },
+      ],
+      { model: resolved.model, temperature: 0.4, maxTokens: 2500 },
+    );
+
+    const raw = this.parseJson(result.content);
+    if (!raw.length) {
+      if (!result.content?.trim()) {
+        this.logger.warn(
+          `Provedor ${resolved.providerId}/${resolved.model} retornou conteúdo vazio no diário (finishReason=${result.finishReason}).`,
+        );
+        throw new BadRequestException(
+          'O provedor de IA retornou resposta vazia. Tente novamente ou troque o modelo em Provedores de IA.',
+        );
+      }
+      raw.push({ category: 'DIARIO', title: 'Dica do diário', content: result.content.slice(0, 1000) });
+    }
+
+    const created = await this.prisma.$transaction(
+      raw.map((tip) =>
+        this.prisma.insight.create({
+          data: {
+            tenantId,
+            category: 'DIARIO',
+            title: (tip.title || 'Dica do diário').slice(0, 140),
+            content: (tip.content || '').slice(0, 2000),
+            sources: withContent.slice(0, 6).map((n) => ({ title: n.title, source: 'nota' })),
+            providerId: resolved.providerId,
+            model: resolved.model,
+          },
+        }),
+      ),
+    );
+
+    const pruned = await this.prune(tenantId);
+    return { generated: created.length, pruned, providerId: resolved.providerId, model: resolved.model };
   }
 
   private async sendDigest(

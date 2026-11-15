@@ -3,7 +3,7 @@ import { ApiService } from './api.service';
 
 export interface InsightSource {
   title: string;
-  url: string;
+  url?: string | null;
   source?: string;
 }
 

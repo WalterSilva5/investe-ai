@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LocalModeService } from '../../common/local-mode.service';
 import { EncryptionService } from './encryption.service';
 import {
   OpenAICompatibleProvider,
@@ -23,10 +25,13 @@ export interface ResolvedProvider {
 
 @Injectable()
 export class AiProviderRegistry {
+  private readonly logger = new Logger(AiProviderRegistry.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly encryption: EncryptionService,
+    private readonly localMode: LocalModeService,
   ) {}
 
   catalog() {
@@ -34,10 +39,20 @@ export class AiProviderRegistry {
   }
 
   async listForTenant(tenantId: string) {
-    const credentials = await this.prisma.providerCredential.findMany({
+    const own = await this.prisma.providerCredential.findMany({
       where: { tenantId },
     });
-    const byId = new Map(credentials.map((c) => [c.providerId, c]));
+    const byId = new Map(own.map((c) => [c.providerId, c]));
+    if (this.localMode.isEnabled()) {
+      // Modo local: reflete a chave efetiva (pode estar salva em outro workspace).
+      const others = await this.prisma.providerCredential.findMany({
+        where: { enabled: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      for (const c of others) {
+        if (!byId.has(c.providerId)) byId.set(c.providerId, c);
+      }
+    }
     const envOpenCode = Boolean(this.config.get<string>('OPENCODE_API_KEY'));
 
     return PROVIDER_CATALOG.map((def) => {
@@ -64,9 +79,7 @@ export class AiProviderRegistry {
     const def = findProvider(id);
     if (!def) throw new NotFoundException(`Provedor desconhecido: ${id}`);
 
-    const credential = await this.prisma.providerCredential.findUnique({
-      where: { tenantId_providerId: { tenantId, providerId: id } },
-    });
+    const credential = await this.findCredential(tenantId, id);
 
     let apiKey = '';
     let baseUrl = def.baseUrl;
@@ -98,6 +111,30 @@ export class AiProviderRegistry {
     }
 
     return this.makeProvider(def, apiKey, baseUrl, finalModel, tenantId);
+  }
+
+  /**
+   * Busca a credencial do workspace. No modo local (usuário único),
+   * reutiliza a chave salva em outro workspace — evita "perder" a chave
+   * ao trocar de workspace no seletor. Em deploy com contas, o vínculo
+   * continua estrito por tenant.
+   */
+  private async findCredential(tenantId: string, providerId: string) {
+    const own = await this.prisma.providerCredential.findUnique({
+      where: { tenantId_providerId: { tenantId, providerId } },
+    });
+    if (own?.enabled) return own;
+    if (!this.localMode.isEnabled()) return own;
+    const fallback = await this.prisma.providerCredential.findFirst({
+      where: { providerId, enabled: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (fallback && fallback.tenantId !== tenantId) {
+      this.logger.log(
+        `Modo local: usando chave "${providerId}" do workspace ${fallback.tenantId} no workspace ${tenantId}.`,
+      );
+    }
+    return fallback ?? own;
   }
 
   private makeProvider(

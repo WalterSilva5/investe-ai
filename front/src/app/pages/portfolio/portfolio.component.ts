@@ -1,7 +1,14 @@
 import { SlicePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CardModule } from 'primeng/card';
+import { ButtonModule } from 'primeng/button';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+import { SelectModule } from 'primeng/select';
+import { ToolbarModule } from 'primeng/toolbar';
 import { ApiService } from '../../core/api.service';
+import { AllocationDonutComponent } from '../../shared/charts/allocation-donut.component';
 
 interface Portfolio {
   id: string;
@@ -62,115 +69,120 @@ interface Transaction {
 
 @Component({
   selector: 'app-portfolio',
-  imports: [FormsModule, SlicePipe],
+  imports: [
+    FormsModule,
+    SlicePipe,
+    CardModule,
+    ButtonModule,
+    TableModule,
+    TagModule,
+    SelectModule,
+    ToolbarModule,
+    AllocationDonutComponent,
+  ],
   template: `
     <h1 class="page-title">Carteira</h1>
     <p class="page-sub">Cadastre ativos e transações. Os números são calculados no servidor.</p>
 
-    <div class="row" style="margin-bottom:16px">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <label class="small muted" for="portfolio">Carteira</label>
-        <select
-          id="portfolio"
-          class="input"
-          style="max-width:260px"
+    <p-toolbar>
+      <ng-template #start>
+        <p-select
+          [options]="portfolioOptions()"
           [(ngModel)]="selectedPortfolioId"
-          (ngModelChange)="loadPortfolio($event)"
-        >
-          @for (p of portfolios(); track p.id) {
-            <option [value]="p.id">{{ p.name }}{{ p.isDefault ? ' (padrão)' : '' }}</option>
-          }
-        </select>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input class="input" style="max-width:180px" [(ngModel)]="newPortfolioName" placeholder="nova carteira" />
-        <button class="btn secondary" (click)="createPortfolio()">Criar</button>
-        <button class="btn secondary" (click)="csvInput.click()">Importar CSV</button>
-        <button class="btn secondary" (click)="downloadTemplate()">Modelo CSV</button>
-        <button class="btn secondary" (click)="downloadReport()">Exportar CSV</button>
-        <button class="btn secondary" (click)="downloadPdf()">Exportar PDF</button>
-        <button class="btn secondary" (click)="refreshQuotes()">Atualizar cotações</button>
-        <input #csvInput type="file" accept=".csv,text/csv" style="display:none" (change)="onFileSelected($event)" />
-      </div>
-    </div>
+          (onChange)="loadPortfolio($event.value)"
+          placeholder="Selecione a carteira"
+        />
+      </ng-template>
+      <ng-template #end>
+        <div class="group" style="display:flex;gap:8px;flex-wrap:wrap">
+          <input class="input" style="max-width:180px" [(ngModel)]="newPortfolioName" placeholder="nova carteira" />
+          <p-button label="Criar" severity="secondary" [outlined]="true" (onClick)="createPortfolio()" />
+          <p-button label="Importar CSV" severity="secondary" [outlined]="true" (onClick)="csvInput.click()" />
+          <p-button label="Modelo CSV" severity="secondary" [outlined]="true" (onClick)="downloadTemplate()" />
+          <p-button label="Exportar CSV" severity="secondary" [outlined]="true" (onClick)="downloadReport()" />
+          <p-button label="Exportar PDF" severity="secondary" [outlined]="true" (onClick)="downloadPdf()" />
+          <p-button label="Atualizar cotações" (onClick)="refreshQuotes()" />
+          <input #csvInput type="file" accept=".csv,text/csv" style="display:none" (change)="onFileSelected($event)" />
+        </div>
+      </ng-template>
+    </p-toolbar>
 
     @if (!portfolios().length) {
-      <div class="card">
-        <h3>Comece criando uma carteira</h3>
+      <p-card header="Comece criando uma carteira" styleClass="section">
         <p class="muted small">Ex.: “Principal”, “Reserva”, “Internacional”.</p>
         <div style="display:flex;gap:8px;margin-top:12px">
           <input class="input" [(ngModel)]="newPortfolioName" placeholder="nome da carteira" />
-          <button class="btn" (click)="createPortfolio()">Criar carteira</button>
+          <p-button label="Criar carteira" (onClick)="createPortfolio()" />
         </div>
-      </div>
+      </p-card>
     }
 
     @if (summary(); as s) {
-      <div class="cards">
-        <div class="card">
-          <h3>Patrimônio</h3>
-          <div class="value">{{ money(s.totalValue) }}</div>
-          <div class="hint">valor atual das posições</div>
-        </div>
-        <div class="card">
-          <h3>Investido</h3>
-          <div class="value">{{ money(s.totalInvested) }}</div>
-          <div class="hint">custo de aquisição</div>
-        </div>
-        <div class="card">
-          <h3>Resultado</h3>
-          <div class="value" [style.color]="s.pnl >= 0 ? 'var(--success)' : 'var(--danger)'">
+      <div class="cards" style="margin-top:16px">
+        <p-card header="Patrimônio">
+          <div class="stat-value">{{ money(s.totalValue) }}</div>
+          <div class="stat-hint">valor atual das posições</div>
+        </p-card>
+        <p-card header="Investido">
+          <div class="stat-value">{{ money(s.totalInvested) }}</div>
+          <div class="stat-hint">custo de aquisição</div>
+        </p-card>
+        <p-card header="Resultado">
+          <div class="stat-value" [style.color]="s.pnl >= 0 ? 'var(--success)' : 'var(--danger)'">
             {{ money(s.pnl) }}
           </div>
-          <div class="hint">{{ s.pnlPct.toFixed(2) }}%</div>
-        </div>
-        <div class="card">
-          <h3>Posições</h3>
-          <div class="value">{{ s.positionsCount }}</div>
-          <div class="hint">ativos na carteira</div>
-        </div>
+          <div class="stat-hint">
+            <p-tag [value]="s.pnlPct.toFixed(2) + '%'" [severity]="s.pnl >= 0 ? 'success' : 'danger'" />
+          </div>
+        </p-card>
+        <p-card header="Posições">
+          <div class="stat-value">{{ s.positionsCount }}</div>
+          <div class="stat-hint">ativos na carteira</div>
+        </p-card>
       </div>
 
       <div class="grid-2" style="margin-top:20px">
-        <section class="card">
-          <h3>Alocação por tipo</h3>
+        <p-card header="Alocação por tipo" styleClass="chart-card">
+          @if (s.allocation.byType.length) {
+            <app-allocation-donut [data]="donutByType()" title="" />
+          } @else {
+            <p class="muted small">Sem posições ainda.</p>
+          }
           <div class="list" style="margin-top:10px">
             @for (item of s.allocation.byType; track item.type) {
               <div>
                 <div style="display:flex;justify-content:space-between;font-size:13px">
                   <span>{{ label(item.type) }}</span>
-                  <span class="muted">{{ item.pct.toFixed(1) }}%</span>
+                  <p-tag [value]="item.pct.toFixed(1) + '%'" severity="secondary" />
                 </div>
-                <div style="height:8px;background:#eef0f3;border-radius:999px;overflow:hidden;margin-top:4px">
+                <div style="height:8px;background:var(--border);border-radius:999px;overflow:hidden;margin-top:4px">
                   <div style="height:100%;background:var(--primary)" [style.width.%]="item.pct"></div>
                 </div>
               </div>
-            } @empty {
-              <p class="muted small">Sem posições ainda.</p>
             }
           </div>
-        </section>
+        </p-card>
 
-        <section class="card">
-          <h3>Nova transação</h3>
+        <p-card header="Nova transação">
           <div class="field">
             <label>Ativo</label>
-            <select class="input" [(ngModel)]="tx.assetId">
-              <option value="">selecione</option>
-              @for (asset of assets(); track asset.id) {
-                <option [value]="asset.id">{{ asset.symbol }} — {{ asset.name }}</option>
-              }
-            </select>
+            <p-select
+              [options]="assetOptions()"
+              [(ngModel)]="tx.assetId"
+              placeholder="selecione"
+              appendTo="body"
+              styleClass="w-full"
+            />
           </div>
           <div class="grid-2">
             <div class="field">
               <label>Tipo</label>
-              <select class="input" [(ngModel)]="tx.type">
-                <option value="BUY">Compra</option>
-                <option value="SELL">Venda</option>
-                <option value="DIVIDEND">Dividendo</option>
-                <option value="INTEREST">Juros</option>
-              </select>
+              <p-select
+                [options]="txTypeOptions"
+                [(ngModel)]="tx.type"
+                appendTo="body"
+                styleClass="w-full"
+              />
             </div>
             <div class="field">
               <label>Data</label>
@@ -185,10 +197,10 @@ interface Transaction {
               <input class="input" type="number" [(ngModel)]="tx.price" />
             </div>
           </div>
-          <button class="btn" style="margin-top:14px" (click)="addTransaction()">Registrar</button>
+          <p-button label="Registrar" styleClass="mt-2" (onClick)="addTransaction()" />
 
           <hr style="border:0;border-top:1px solid var(--border);margin:18px 0" />
-          <h3>Novo ativo</h3>
+          <h3 style="font-size:14px;color:var(--muted)">Novo ativo</h3>
           <div class="grid-2">
             <div class="field">
               <label>Símbolo</label>
@@ -196,59 +208,54 @@ interface Transaction {
             </div>
             <div class="field">
               <label>Tipo</label>
-              <select class="input" [(ngModel)]="assetForm.type">
-                <option value="STOCK">Ação</option>
-                <option value="FII">FII</option>
-                <option value="ETF">ETF</option>
-                <option value="FIXED_INCOME">Renda fixa</option>
-                <option value="CRYPTO">Cripto</option>
-                <option value="CASH">Caixa</option>
-              </select>
+              <p-select
+                [options]="assetTypeOptions"
+                [(ngModel)]="assetForm.type"
+                appendTo="body"
+                styleClass="w-full"
+              />
             </div>
           </div>
           <div class="field">
             <label>Nome</label>
             <input class="input" [(ngModel)]="assetForm.name" placeholder="Petrobras PN" />
           </div>
-          <button class="btn secondary" style="margin-top:12px" (click)="createAsset()">Criar ativo</button>
-        </section>
+          <p-button label="Criar ativo" severity="secondary" [outlined]="true" (onClick)="createAsset()" />
+        </p-card>
       </div>
 
       <section class="section">
         <h2>Posições</h2>
-        <div class="card" style="padding:0;overflow:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:13.5px">
-            <thead>
-              <tr style="text-align:left;background:#f9fafb">
-                <th style="padding:10px 12px">Ativo</th>
-                <th style="padding:10px 12px">Qtd</th>
-                <th style="padding:10px 12px">Preço médio</th>
-                <th style="padding:10px 12px">Investido</th>
-                <th style="padding:10px 12px">Atual</th>
-                <th style="padding:10px 12px">Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (p of positions(); track p.symbol) {
-                <tr style="border-top:1px solid var(--border)">
-                  <td style="padding:10px 12px"><strong>{{ p.symbol }}</strong> <span class="muted small">{{ p.name }}</span></td>
-                  <td style="padding:10px 12px">{{ p.quantity }}</td>
-                  <td style="padding:10px 12px">{{ money(p.averagePrice) }}</td>
-                  <td style="padding:10px 12px">{{ money(p.invested) }}</td>
-                  <td style="padding:10px 12px">
-                    {{ money(p.currentValue) }}
-                    @if (!p.hasMarketPrice) { <span class="badge off">sem cotação</span> }
-                  </td>
-                  <td style="padding:10px 12px" [style.color]="p.pnl >= 0 ? 'var(--success)' : 'var(--danger)'">
-                    {{ money(p.pnl) }} ({{ p.pnlPct.toFixed(2) }}%)
-                  </td>
-                </tr>
-              } @empty {
-                <tr><td colspan="6" style="padding:16px" class="muted">Nenhuma posição.</td></tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        <p-table [value]="positions()" stripedRows [scrollable]="true" scrollHeight="420px">
+          <ng-template #header>
+            <tr>
+              <th>Ativo</th>
+              <th>Qtd</th>
+              <th>Preço médio</th>
+              <th>Investido</th>
+              <th>Atual</th>
+              <th>Resultado</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-p>
+            <tr>
+              <td><strong>{{ p.symbol }}</strong> <span class="muted small">{{ p.name }}</span></td>
+              <td>{{ p.quantity }}</td>
+              <td>{{ money(p.averagePrice) }}</td>
+              <td>{{ money(p.invested) }}</td>
+              <td>
+                {{ money(p.currentValue) }}
+                @if (!p.hasMarketPrice) { <p-tag value="sem cotação" severity="secondary" /> }
+              </td>
+              <td [style.color]="p.pnl >= 0 ? 'var(--success)' : 'var(--danger)'">
+                {{ money(p.pnl) }} ({{ p.pnlPct.toFixed(2) }}%)
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr><td colspan="6" class="muted">Nenhuma posição.</td></tr>
+          </ng-template>
+        </p-table>
       </section>
 
       <section class="section">
@@ -260,7 +267,7 @@ interface Transaction {
                 <div class="name">{{ t.asset.symbol }} — {{ label(t.type) }}</div>
                 <div class="meta">{{ t.date | slice:0:10 }} · {{ t.quantity }} × {{ money(t.price) }}</div>
               </div>
-              <button class="btn secondary" (click)="removeTransaction(t.id)">Excluir</button>
+              <p-button label="Excluir" severity="secondary" [outlined]="true" size="small" (onClick)="removeTransaction(t.id)" />
             </div>
           } @empty {
             <p class="muted small">Nenhuma transação.</p>
@@ -273,6 +280,7 @@ interface Transaction {
       <div class="alert" [class.ok]="ok()" [class.error]="!ok()">{{ message() }}</div>
     }
   `,
+  styles: [`.mt-2 { margin-top: 14px; }`],
 })
 export class PortfolioComponent {
   private readonly api = inject(ApiService);
@@ -290,9 +298,43 @@ export class PortfolioComponent {
   tx = { assetId: '', type: 'BUY', quantity: 1, price: 0, date: new Date().toISOString().slice(0, 10) };
   assetForm = { symbol: '', name: '', type: 'STOCK' };
 
+  readonly txTypeOptions = [
+    { label: 'Compra', value: 'BUY' },
+    { label: 'Venda', value: 'SELL' },
+    { label: 'Dividendo', value: 'DIVIDEND' },
+    { label: 'Juros', value: 'INTEREST' },
+  ];
+
+  readonly assetTypeOptions = [
+    { label: 'Ação', value: 'STOCK' },
+    { label: 'FII', value: 'FII' },
+    { label: 'ETF', value: 'ETF' },
+    { label: 'Renda fixa', value: 'FIXED_INCOME' },
+    { label: 'Cripto', value: 'CRYPTO' },
+    { label: 'Caixa', value: 'CASH' },
+  ];
+
+  readonly portfolioOptions = computed(() =>
+    this.portfolios().map((p) => ({
+      label: p.name + (p.isDefault ? ' (padrão)' : ''),
+      value: p.id,
+    })),
+  );
+
+  readonly assetOptions = computed(() =>
+    this.assets().map((a) => ({ label: `${a.symbol} - ${a.name}`, value: a.id })),
+  );
+
   constructor() {
     this.loadPortfolios();
     this.loadAssets();
+  }
+
+  donutByType() {
+    return (this.summary()?.allocation.byType || []).map((a) => ({
+      name: this.label(a.type),
+      value: a.pct,
+    }));
   }
 
   loadPortfolios() {

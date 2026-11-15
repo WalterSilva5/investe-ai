@@ -223,13 +223,12 @@ export class ChatComponent {
   private async streamSend(content: string): Promise<void> {
     const token = localStorage.getItem('wsi.accessToken');
     const tenantId = localStorage.getItem('wsi.tenantId');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['x-tenant-id'] = tenantId;
     const response = await fetch(`${API_BASE_URL}/ai/chat/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        'x-tenant-id': tenantId || '',
-      },
+      headers,
       body: JSON.stringify({
         message: content,
         conversationId: this.conversationId,
