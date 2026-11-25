@@ -4,11 +4,13 @@ import {
   Get,
   Param,
   Post,
+  Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -16,7 +18,7 @@ import { TenantGuard } from '../../common/guards/tenant.guard';
 import { AiService } from './ai.service';
 import { AiToolsService } from './ai-tools.service';
 import { AiUsageService } from './ai-usage.service';
-import { AGENT_PROFILES } from './agent-profiles';
+import { AGENT_PROFILES, toolsForProfile } from './agent-profiles';
 import { ChatDto } from './dto/chat.dto';
 
 @ApiTags('ai')
@@ -45,14 +47,25 @@ export class AiController {
     @CurrentUser() user: { userId: string },
     @Body() dto: ChatDto,
     @Res() response: Response,
+    @Req() request: Request,
   ) {
     response.set({
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
+    let aborted = false;
+    request.on('close', () => {
+      if (!response.writableEnded) aborted = true;
+    });
     try {
-      for await (const event of this.ai.streamChat(tenantId, user.userId, dto)) {
+      for await (const event of this.ai.streamChat(
+        tenantId,
+        user.userId,
+        dto,
+        () => aborted,
+      )) {
+        if (response.destroyed) break;
         response.write(`data: ${JSON.stringify(event)}\n\n`);
       }
     } catch (error) {
@@ -79,6 +92,17 @@ export class AiController {
       description: profile.description,
       icon: profile.icon,
     }));
+  }
+
+  @Get('tools')
+  listTools(@Query('profile') profileId?: string) {
+    const defs = this.tools.definitions();
+    const names = toolsForProfile(
+      profileId,
+      defs.map((d) => d.function.name),
+    );
+    const byName = new Map(defs.map((d) => [d.function.name, d.function.description]));
+    return names.map((name) => ({ name, description: byName.get(name) || '' }));
   }
 
   @Post('tools/:name')

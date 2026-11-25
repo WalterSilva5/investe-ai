@@ -1,20 +1,21 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
+import { LocalModeService } from '../../common/local-mode.service';
 
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly localMode: LocalModeService) {}
 
   @Get()
   check() {
-    const raw = (this.config.get<string>('LOCAL_MODE') ?? 'true').toLowerCase().trim();
+    const open = this.localMode.isEnabled();
     return {
       status: 'ok',
       service: 'wsi-invest-ai',
       timestamp: new Date().toISOString(),
-      localMode: raw === 'true' || raw === '1' || raw === 'yes',
+      authEnabled: !open,
+      localMode: open,
     };
   }
 }

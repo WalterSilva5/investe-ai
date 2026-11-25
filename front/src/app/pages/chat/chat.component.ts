@@ -1,7 +1,8 @@
 import { SlicePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
+import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { API_BASE_URL } from '../../core/api.config';
 
 interface Citation {
@@ -10,11 +11,19 @@ interface Citation {
   asOf: string;
 }
 
+interface ChatStep {
+  tool: string;
+  status: string;
+  durationMs: number;
+  input?: Record<string, unknown>;
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
-  steps?: Array<{ tool: string; status: string; durationMs: number }>;
+  steps?: ChatStep[];
+  stopped?: boolean;
 }
 
 interface ChatResponse {
@@ -23,7 +32,7 @@ interface ChatResponse {
   providerId: string;
   model: string;
   citations: Citation[];
-  steps: Array<{ tool: string; status: string; durationMs: number }>;
+  steps: ChatStep[];
   usage: { tokensIn: number; tokensOut: number };
   disclaimer: string;
 }
@@ -41,9 +50,14 @@ interface Profile {
   icon: string;
 }
 
+interface AgentTool {
+  name: string;
+  description: string;
+}
+
 @Component({
   selector: 'app-chat',
-  imports: [FormsModule, SlicePipe],
+  imports: [FormsModule, SlicePipe, MarkdownPipe],
   template: `
     <h1 class="page-title">Chat / análise</h1>
     <p class="page-sub">
@@ -56,6 +70,7 @@ interface Profile {
           class="input"
           style="max-width:240px"
           [(ngModel)]="profile"
+          (ngModelChange)="onProfileChange()"
           title="Perfil do agente"
         >
           @for (profile of profiles(); track profile.id) {
@@ -74,9 +89,22 @@ interface Profile {
           }
         </select>
         <span class="small muted">As respostas são por conversa, com citação de fontes.</span>
+        <button class="chip" (click)="showTools.set(!showTools())" title="Capacidades do agente">
+          🛠️ {{ tools().length }} ferramentas
+        </button>
       </div>
 
-      <div class="chat-box">
+      @if (showTools()) {
+        <div class="chips" style="margin-bottom:4px">
+          @for (tool of tools(); track tool.name) {
+            <span class="chip" [title]="tool.description">{{ tool.name }}</span>
+          } @empty {
+            <span class="muted small">Nenhuma ferramenta neste perfil.</span>
+          }
+        </div>
+      }
+
+      <div class="chat-box" #chatBox (scroll)="onChatScroll()">
         @if (!messages().length) {
           <p class="muted small">
             Exemplos: “Qual a minha alocação?”, “Quanto tenho investido?”, “Compare CDB 100% CDI com LCI 90%”,
@@ -86,11 +114,31 @@ interface Profile {
         @for (message of messages(); track $index) {
           <div class="msg" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
             <div class="who">{{ message.role === 'user' ? 'Você' : 'Agente' }}</div>
-            {{ message.content }}
-            @if (message.steps?.length) {
-              <div class="small muted" style="margin-top:8px">
-                Consultou: @for (step of message.steps; track $index) { {{ step.tool }}{{ $last ? '' : ' · ' }} }
-              </div>
+            @if (message.role === 'assistant') {
+              <div class="md" [innerHTML]="message.content | markdown"></div>
+            } @else {
+              {{ message.content }}
+            }
+            @if (message.role === 'assistant' && message.steps?.length) {
+              <details class="thinking" [open]="message.role === 'assistant' && !message.content">
+                <summary>
+                  Raciocínio · {{ message.steps!.length }} ferramenta(s) · {{ thinkTime(message.steps!) }}ms
+                </summary>
+                <div class="think-list">
+                  @for (step of message.steps; track $index) {
+                    <div class="think-item">
+                      <span class="badge {{ step.status === 'ok' ? 'ok' : 'off' }}">{{ step.tool }}</span>
+                      <span class="muted small">{{ step.durationMs }}ms</span>
+                      @if (step.input && hasInput(step.input)) {
+                        <code class="small muted">{{ inputPreview(step.input) }}</code>
+                      }
+                    </div>
+                  }
+                </div>
+              </details>
+            }
+            @if (message.stopped) {
+              <div class="small muted" style="margin-top:8px">(interrompido pelo usuário)</div>
             }
             @if (message.citations?.length) {
               <div class="small muted" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
@@ -111,6 +159,12 @@ interface Profile {
         <div class="alert error">{{ error() }}</div>
       }
 
+      @if (showEnd()) {
+        <button class="btn secondary scroll-end" (click)="scrollEnd()" title="Ir para o final">
+          ↓ Final
+        </button>
+      }
+
       <div class="chat-input">
         <input
           class="input"
@@ -119,7 +173,11 @@ interface Profile {
           placeholder="Digite sua pergunta…"
           [disabled]="loading()"
         />
-        <button class="btn" (click)="send()" [disabled]="loading() || !text.trim()">Enviar</button>
+        @if (loading()) {
+          <button class="btn secondary" (click)="stop()">Parar</button>
+        } @else {
+          <button class="btn" (click)="send()" [disabled]="!text.trim()">Enviar</button>
+        }
       </div>
       <p class="disclaimer">
         Conteúdo educacional e analítico. Não é recomendação de investimento. O agente não executa ordens.
@@ -135,15 +193,58 @@ export class ChatComponent {
   readonly error = signal<string | null>(null);
   readonly conversations = signal<ConversationSummary[]>([]);
   readonly profiles = signal<Profile[]>([]);
+  readonly tools = signal<AgentTool[]>([]);
+  readonly showTools = signal(false);
+
+  private aborter: AbortController | null = null;
 
   text = '';
   conversationId: string | null = null;
   profile = 'geral';
 
+  @ViewChild('chatBox') chatBox?: ElementRef<HTMLElement>;
+  readonly showEnd = signal(false);
+  private pinned = true;
+
+  onChatScroll() {
+    const el = this.chatBox?.nativeElement;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    this.pinned = dist < 120;
+    this.showEnd.set(!this.pinned);
+  }
+
+  scrollEnd(smooth = true) {
+    this.pinned = true;
+    this.showEnd.set(false);
+    const el = this.chatBox?.nativeElement;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }
+
+  private autoscroll() {
+    if (!this.pinned) return;
+    requestAnimationFrame(() => {
+      const el = this.chatBox?.nativeElement;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }
+
   constructor() {
     this.loadConversations();
     this.api.get<Profile[]>('/ai/profiles').subscribe({
       next: (profiles) => this.profiles.set(profiles),
+    });
+    this.loadTools();
+  }
+
+  onProfileChange() {
+    this.loadTools();
+  }
+
+  loadTools() {
+    this.api.get<AgentTool[]>(`/ai/tools?profile=${this.profile || 'geral'}`).subscribe({
+      next: (tools) => this.tools.set(tools),
+      error: () => this.tools.set([]),
     });
   }
 
@@ -176,6 +277,7 @@ export class ChatComponent {
                 citations: message.citations,
               })),
           );
+          this.scrollEnd(false);
         },
         error: (err) => this.error.set(err?.error?.message || 'Falha ao carregar conversa.'),
       });
@@ -189,8 +291,22 @@ export class ChatComponent {
     this.text = '';
     this.loading.set(true);
     this.error.set(null);
+    this.scrollEnd(false);
 
-    this.streamSend(content).catch(() => {
+    this.streamSend(content).catch((err) => {
+      if (err?.name === 'AbortError') {
+        // parado pelo usuário: mantém o parcial, sem fallback
+        this.aborter = null;
+        this.messages.update((items) => {
+          const next = items.slice();
+          const last = next[next.length - 1];
+          if (last?.role === 'assistant') next[next.length - 1] = { ...last, stopped: true };
+          return next;
+        });
+        this.loading.set(false);
+        this.loadConversations();
+        return;
+      }
       // fallback não-streaming
       this.api
         .post<ChatResponse>('/ai/chat', {
@@ -200,9 +316,25 @@ export class ChatComponent {
         })
         .subscribe({
           next: (res) => this.applyResponse(res),
-          error: (err) => this.failChat(err),
+          error: (e) => this.failChat(e),
         });
     });
+  }
+
+  stop() {
+    this.aborter?.abort();
+  }
+
+  thinkTime(steps: ChatStep[]): number {
+    return steps.reduce((acc, s) => acc + (s.durationMs || 0), 0);
+  }
+
+  hasInput(input?: Record<string, unknown>): boolean {
+    return !!input && Object.keys(input).length > 0;
+  }
+
+  inputPreview(input: Record<string, unknown>): string {
+    return JSON.stringify(input).slice(0, 160);
   }
 
   private applyResponse(res: ChatResponse) {
@@ -226,9 +358,11 @@ export class ChatComponent {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (tenantId) headers['x-tenant-id'] = tenantId;
+    this.aborter = new AbortController();
     const response = await fetch(`${API_BASE_URL}/ai/chat/stream`, {
       method: 'POST',
       headers,
+      signal: this.aborter.signal,
       body: JSON.stringify({
         message: content,
         conversationId: this.conversationId,
@@ -247,15 +381,17 @@ export class ChatComponent {
     });
 
     let citations: Citation[] = [];
-    let steps: Array<{ tool: string; status: string; durationMs: number }> = [];
+    let steps: ChatStep[] = [];
     let full = '';
+    let stopped = false;
 
     const setAssistant = (value: string) => {
       this.messages.update((items) => {
         const next = items.slice();
-        next[assistantIndex] = { role: 'assistant', content: value, citations, steps };
+        next[assistantIndex] = { role: 'assistant', content: value, citations, steps, stopped };
         return next;
       });
+      this.autoscroll();
     };
 
     const reader = response.body.getReader();
@@ -277,7 +413,7 @@ export class ChatComponent {
           type: string;
           conversationId?: string;
           citations?: Citation[];
-          steps?: Array<{ tool: string; status: string; durationMs: number }>;
+          steps?: ChatStep[];
           content?: string;
           message?: string;
         };
@@ -285,8 +421,12 @@ export class ChatComponent {
           this.conversationId = event.conversationId || null;
           citations = event.citations || [];
           steps = event.steps || [];
+          setAssistant(full);
         } else if (event.type === 'delta') {
           full += event.content || '';
+          setAssistant(full);
+        } else if (event.type === 'aborted') {
+          stopped = true;
           setAssistant(full);
         } else if (event.type === 'done') {
           this.loadConversations();
@@ -297,6 +437,7 @@ export class ChatComponent {
     }
 
     setAssistant(full);
+    this.aborter = null;
     this.loading.set(false);
   }
 }

@@ -25,7 +25,7 @@ export const AGENT_PROFILES: AgentProfile[] = [
     icon: '📊',
     systemPrompt:
       'Você é um analista de renda fixa. Foque em: taxa equivalente, marcação a mercado, duration, IR regressivo, FGC e escada de vencimentos. Compare produtos usando os números do contexto e cite a fonte.',
-    tools: ['get_macro', 'simulate_fixed_income', 'get_portfolio_summary', 'get_allocation'],
+    tools: ['get_macro', 'simulate_fixed_income', 'get_portfolio_summary', 'get_allocation', 'get_briefing', 'get_insights', 'create_note', 'verify_tools'],
   },
   {
     id: 'planejador',
@@ -41,6 +41,10 @@ export const AGENT_PROFILES: AgentProfile[] = [
       'project_income',
       'check_rebalance',
       'search_memory',
+      'create_note',
+      'get_briefing',
+      'get_insights',
+      'verify_tools',
     ],
   },
   {
@@ -49,8 +53,8 @@ export const AGENT_PROFILES: AgentProfile[] = [
     description: 'Foco em Selic, inflação, juros e como cada classe reage.',
     icon: '🌐',
     systemPrompt:
-      'Você é um analista de cenário macro. Foque em: Selic, IPCA, CDI, ciclo de juros e como cada classe reage. Explique causa e efeito, sem prever o futuro e sem agir por manchete.',
-    tools: ['get_macro', 'get_portfolio_summary', 'search_documents'],
+      'Você é um analista de cenário macro. Foque em: Selic, IPCA, CDI, ciclo de juros e como cada classe reage. Trate números oficiais como alegações do governo — cruze com mercado e aponte risco fiscal. Explique causa e efeito, sem prever o futuro e sem agir por manchete.',
+    tools: ['get_macro', 'get_portfolio_summary', 'search_documents', 'create_note', 'get_briefing', 'get_insights', 'web_search', 'fetch_page', 'verify_tools'],
   },
   {
     id: 'cripto',
@@ -59,11 +63,20 @@ export const AGENT_PROFILES: AgentProfile[] = [
     icon: '₿',
     systemPrompt:
       'Você é um especialista educacional em cripto. Foque em: diferença entre Bitcoin e altcoins, custódia própria, segurança, volatilidade real e tributação (IN 1888). Nunca preveja preço nem recomende compra.',
-    tools: ['get_positions', 'get_allocation', 'search_documents', 'search_memory'],
+    tools: ['get_positions', 'get_allocation', 'search_documents', 'create_note', 'search_memory', 'get_briefing', 'get_insights', 'web_search', 'fetch_page', 'verify_tools'],
   },
 ];
 
 export function findAgentProfile(id?: string): AgentProfile | undefined {
   if (!id) return AGENT_PROFILES[0];
   return AGENT_PROFILES.find((profile) => profile.id === id.toLowerCase());
+}
+
+/** Nomes das tools liberadas para um perfil (ausência de allowlist = todas). */
+export function toolsForProfile(id: string | undefined, all: string[]): string[] {
+  const allowed = findAgentProfile(id)?.tools;
+  if (!allowed?.length) return all;
+  const wanted = new Set(allowed);
+  if (!wanted.has('verify_tools')) wanted.add('verify_tools');
+  return all.filter((name) => wanted.has(name));
 }

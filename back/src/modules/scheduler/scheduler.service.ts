@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { QuotesService } from '../market/quotes.service';
 import { InsightsService } from '../insights/insights.service';
+import { OpportunitiesService } from '../opportunities/opportunities.service';
 
 @Injectable()
 export class SchedulerService {
@@ -14,6 +15,7 @@ export class SchedulerService {
     private readonly quotes: QuotesService,
     private readonly alerts: AlertsService,
     private readonly insights: InsightsService,
+    private readonly opportunities: OpportunitiesService,
   ) {}
 
   /** Dias úteis, 18h (horário do servidor). */
@@ -69,6 +71,32 @@ export class SchedulerService {
         );
       } catch (error) {
         this.logger.warn(`Falha ao gerar insights ${tenant.id}: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  /** Segunda 9h — resumo do ciclo atual a partir das análises da semana. */
+  @Cron('0 9 * * 1')
+  async refreshCycleSummary(): Promise<void> {
+    if (process.env.ENABLE_CRON === 'false') return;
+
+    const tenants = await this.prisma.opportunityBrief.findMany({
+      select: { tenantId: true },
+      distinct: ['tenantId'],
+    });
+
+    for (const { tenantId } of tenants) {
+      try {
+        await this.opportunities.refreshCycle(tenantId);
+        this.logger.log(`Resumo do ciclo ${tenantId}: atualizado.`);
+      } catch (error) {
+        this.logger.warn(`Falha no resumo do ciclo ${tenantId}: ${(error as Error).message}`);
+      }
+      try {
+        await this.opportunities.refreshActions(tenantId);
+        this.logger.log(`Dicas de ação ${tenantId}: atualizadas.`);
+      } catch (error) {
+        this.logger.warn(`Falha nas dicas de ação ${tenantId}: ${(error as Error).message}`);
       }
     }
   }

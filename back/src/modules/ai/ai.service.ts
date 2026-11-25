@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,13 +21,25 @@ const SYSTEM_PROMPT = `Você é o assistente do wsi-invest-ai, uma ferramenta de
 Responda em português do Brasil, de forma direta e didática.
 
 Regras obrigatórias:
-- Use as ferramentas para obter dados da carteira, macro e renda fixa. Nunca invente números.
+- Use as ferramentas para obter dados da carteira, macro, renda fixa e dicas (insights). Nunca invente números.
+- No início da conversa, use get_briefing para ter o contexto geral (carteira + macro + dicas recentes).
+- Se não souber o que pode fazer, use verify_tools para listar suas ferramentas antes de agir.
 - Se a ferramenta não retornar o dado, diga que não tem.
 - Cite a fonte e a data de cada dado usado.
 - NÃO recomende compra ou venda, NÃO preveja preço e NÃO prometa retorno.
 - Deixe claro que a resposta é educacional e não é recomendação de investimento.
 - Você não executa ordens.
-- Se a pergunta não for sobre investimentos/carteira, responda brevemente e volte ao escopo.`;
+- Se a pergunta não for sobre investimentos/carteira, responda brevemente e volte ao escopo.
+- Ceticismo fiscal obrigatório: trate dados e narrativas oficiais (BCB, Tesouro, ministérios, estatais, governos sem responsabilidade fiscal) como ALEGAÇÕES de parte interessada, não como verdade. Cruze com o comportamento do mercado (juros longos, câmbio, crédito) e aponte incentivos (maquiar déficit, adiar ajuste), trajetória da dívida e risco fiscal/inflacionário. Índices oficiais (ex.: IPCA) medem uma cesta e metodologia específicas — questione-as quando relevante em vez de repeti-las como fato.`;
+
+const COMPACT_PROMPT = `Você resume conversas para economizar contexto. Recebe o resumo anterior (pode estar vazio) e as mensagens novas.
+Devolva APENAS o resumo atualizado, compacto (até 600 caracteres), com: objetivo do usuário, fatos/decisões/números já apurados e pendências.
+Sem rodeios, sem recomendação, sem previsão.`;
+
+/** A cada N mensagens novas, o resumo da sessão é atualizado (economia de tokens). */
+const COMPACT_EVERY = 6;
+/** Com resumo ativo, só as N últimas mensagens vão ao contexto. */
+const COMPACT_KEEP_LAST = 6;
 
 interface ToolLog {
   tool: string;
@@ -47,6 +60,8 @@ interface Generation {
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: AiProviderRegistry,
@@ -103,10 +118,7 @@ export class AiService {
           await this.memories.top(tenantId),
         )}. Use a ferramenta search_memory para mais.`,
       },
-      ...conversation.messages.map((m) => ({
-        role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
-        content: m.content,
-      })),
+      ...this.historyMessages(conversation),
       { role: 'user', content: dto.message },
     ];
 
@@ -180,6 +192,8 @@ export class AiService {
       });
     });
 
+    await this.maybeCompact(conversation.id, resolved.provider, generation.model);
+
     return {
       conversationId: conversation.id,
       providerId: resolved.providerId,
@@ -190,6 +204,7 @@ export class AiService {
         tool: log.tool,
         status: log.status,
         durationMs: log.durationMs,
+        input: log.input,
       })),
       usage: { tokensIn: generation.tokensIn, tokensOut: generation.tokensOut },
       disclaimer:
@@ -248,6 +263,7 @@ export class AiService {
     tenantId: string,
     userId: string,
     dto: ChatDto,
+    isAborted?: () => boolean,
   ): AsyncGenerator<Record<string, unknown>> {
     await this.usage.assertQuota(userId, tenantId);
     const resolved = await this.registry.resolve(tenantId, dto.providerId, dto.model);
@@ -294,10 +310,7 @@ export class AiService {
           await this.memories.top(tenantId),
         )}. Use a ferramenta search_memory para mais.`,
       },
-      ...conversation.messages.map((m) => ({
-        role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
-        content: m.content,
-      })),
+      ...this.historyMessages(conversation),
       { role: 'user', content: dto.message },
     ];
 
@@ -339,6 +352,7 @@ export class AiService {
         tool: log.tool,
         status: log.status,
         durationMs: log.durationMs,
+        input: log.input,
       })),
     };
 
@@ -347,8 +361,14 @@ export class AiService {
       model: resolvedTools.model,
       temperature,
     })) {
+      if (isAborted?.()) break;
       content += chunk.delta;
       yield { type: 'delta', content: chunk.delta };
+    }
+
+    if (isAborted?.()) {
+      yield { type: 'aborted' };
+      return;
     }
 
     await this.persist(
@@ -362,6 +382,7 @@ export class AiService {
       resolved.providerId,
       resolvedTools.model,
     );
+    await this.maybeCompact(conversation.id, resolved.provider, resolvedTools.model);
     yield { type: 'done' };
   }
 
@@ -437,6 +458,80 @@ export class AiService {
       throw new ForbiddenException('Sem acesso a esta conversa.');
     }
     return conversation;
+  }
+
+  private historyMessages(conversation: {
+    summary: string | null;
+    messages: Array<{ role: string; content: string }>;
+  }): ChatMessage[] {
+    const all = conversation.messages.map((m) => ({
+      role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
+      content: m.content,
+    }));
+    if (conversation.summary) {
+      return [
+        {
+          role: 'system',
+          content: `Resumo compacto da conversa até aqui: ${conversation.summary}. Abaixo vão só as últimas mensagens; use o resumo como contexto.`,
+        },
+        ...all.slice(-COMPACT_KEEP_LAST),
+      ];
+    }
+    return all;
+  }
+
+  /**
+   * Compacta a sessão a cada COMPACT_EVERY mensagens novas: resume o trecho
+   * novo junto ao resumo anterior e guarda em conversation.summary, para as
+   * próximas respostas usarem resumo + últimas mensagens (menos tokens).
+   * Best-effort: falha nunca quebra o chat.
+   */
+  private async maybeCompact(
+    conversationId: string,
+    provider: OpenAICompatibleProvider,
+    model: string,
+  ): Promise<void> {
+    try {
+      const [count, conv] = await Promise.all([
+        this.prisma.message.count({ where: { conversationId } }),
+        this.prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { summary: true, summaryCount: true },
+        }),
+      ]);
+      if (!conv || count - conv.summaryCount < COMPACT_EVERY) return;
+      const fresh = await this.prisma.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'asc' },
+        skip: conv.summaryCount,
+        take: COMPACT_EVERY + 2,
+      });
+      if (!fresh.length) return;
+      const result = await provider.chat(
+        [
+          { role: 'system', content: COMPACT_PROMPT },
+          {
+            role: 'user',
+            content: `Resumo anterior: ${conv.summary || '(vazio)'}\n\nNovas mensagens:\n${fresh
+              .map((m) => `${m.role}: ${m.content.slice(0, 1500)}`)
+              .join('\n')}`,
+          },
+        ],
+        { model, temperature: 0.2, maxTokens: 1500 },
+      );
+      const summary = result.content.trim().slice(0, 1500);
+      if (!summary) {
+        this.logger.warn('Compactação gerou conteúdo vazio; resumo mantido.');
+        return;
+      }
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { summary, summaryCount: count },
+      });
+      this.logger.log(`Sessão ${conversationId} compactada (${count} msgs).`);
+    } catch (error) {
+      this.logger.warn(`Compactação da sessão falhou: ${(error as Error).message}`);
+    }
   }
 
   private async resolveTools(

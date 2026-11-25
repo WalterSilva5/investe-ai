@@ -23,8 +23,28 @@ export class OpportunitiesController {
   }
 
   @Get('radar')
-  radar(@TenantId() tenantId: string) {
-    return this.opportunities.radar(tenantId);
+  radar(@TenantId() tenantId: string, @Query('mode') mode?: string) {
+    return this.opportunities.radar(tenantId, mode);
+  }
+
+  @Get('current-cycle')
+  currentCycle(@TenantId() tenantId: string) {
+    return this.opportunities.currentCycle(tenantId);
+  }
+
+  @Post('current-cycle/refresh')
+  refreshCycle(@TenantId() tenantId: string) {
+    return this.opportunities.refreshCycle(tenantId);
+  }
+
+  @Get('action-tips')
+  actionTips(@TenantId() tenantId: string) {
+    return this.opportunities.latestActions(tenantId);
+  }
+
+  @Post('action-tips/refresh')
+  refreshActionTips(@TenantId() tenantId: string) {
+    return this.opportunities.refreshActions(tenantId);
   }
 
   @Get()

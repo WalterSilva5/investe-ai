@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Ajudar o investidor a **entender narrativas e ciclos de mercado** (IA, cripto, metaverso, NFTs, semicondutores, energia etc.) — separando **fato de hype** e identificando **risco e estágio do ciclo**.
+Ajudar o investidor a **entender narrativas e ciclos de mercado** — tech (IA, cripto, semicondutores) e economia real (agro, bancos, FIIs, petróleo/mineração, consumo, saúde, energia, defesa) — separando **fato de hype** e identificando **risco e estágio do ciclo**.
 
 > **Enquadramento ético:** a ferramenta serve para **o investidor se proteger** e agir com critério. **Não** é para explorar a ignorância de outros investidores, manipular preços ou "vender sonho". O app não recomenda compra/venda e não prevê preço.
 

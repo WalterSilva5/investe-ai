@@ -41,8 +41,14 @@ Catálogo (OpenAI-compatible, um adaptador resolve a maioria):
 | `project_income` | valor futuro com aportes | Cálculo determinístico |
 | `check_rebalance` | desvio vs. meta | Carteira do usuário |
 | `search_documents` | busca nas notas do usuário | Notas do usuário |
+| `create_note` | salva anotação no Diário | Diário do usuário |
+| `verify_tools` | lista as tools do perfil (autodescoberta) | Catálogo do agente |
 | `search_memory` | busca na memória do agente | Memória do agente |
 | `remember` | grava uma memória | Memória do agente |
+| `get_briefing` | contexto geral: carteira + macro + dicas recentes + não lidas | Carteira + macro + dicas de IA |
+| `get_insights` | dicas recentes de IA, com filtro por categoria | Dicas de IA |
+| `web_search` | pesquisa rápida na internet (resumos + links) | DuckDuckGo |
+| `fetch_page` | lê o texto de página pública (anti-SSRF, 12k chars) | Página citada |
 
 Números nunca vêm do modelo: toda tool é código determinístico no servidor, e a resposta cita **fonte + data**.
 
@@ -51,6 +57,12 @@ Números nunca vêm do modelo: toda tool é código determinístico no servidor,
 - `Memory` (kind: `fact|decision|preference|episode|procedure|context` + importância 1–10).
 - As memórias mais importantes são injetadas como contexto em toda conversa.
 - O agente pode gravar (`remember`) e buscar (`search_memory`) por iniciativa própria.
+
+## Compactação de sessão
+
+- A cada **6 mensagens novas**, a sessão é compactada: o agente resume o trecho novo junto ao resumo anterior (`conversation.summary` + `summaryCount`).
+- Com resumo ativo, o contexto passa a ser **resumo + últimas 6 mensagens** (em vez do histórico cheio) — economia crescente de tokens em conversas longas.
+- Best-effort: falha na compactação nunca quebra o chat.
 
 ## Streaming
 
@@ -74,6 +86,13 @@ Números nunca vêm do modelo: toda tool é código determinístico no servidor,
 ## Teste determinístico
 
 `POST /ai/tools/:name` (auth + tenant) executa a tool sem LLM — útil para validar dados e para depurar.
+`GET /ai/tools?profile=<id>` lista as tools disponíveis no perfil (nome + descrição) — o chat exibe como "ferramentas".
+
+## Streaming, parada e raciocínio
+
+- `POST /ai/chat/stream` (SSE): `meta` (com `steps`: tool, status, duração e inputs) → `delta`* → `done`.
+- O front tem botão **Parar**: aborta o fetch; o back detecta o disconnect, interrompe o loop e **não persiste** a resposta parcial (evento `aborted`).
+- O chat mostra o **Raciocínio** expansível por mensagem (ferramentas usadas, tempo e inputs).
 
 ## Configuração (env)
 

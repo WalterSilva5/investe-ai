@@ -2,6 +2,7 @@
 
 Base: `http://localhost:3000/api` (prefixo configurável via `API_PREFIX`).
 Autenticação: `Authorization: Bearer <accessToken>`. Rotas protegidas exigem também o header `x-tenant-id` (resolvido automaticamente se omitido).
+Modo do ambiente: `AUTH_ENABLED=false` (padrão) = aberto, sem login (assume app local); `AUTH_ENABLED=true` = exige conta. `GET /health` expõe `authEnabled`.
 Documentação interativa: `GET /api/docs` (Swagger).
 
 ## Autenticação (`/auth`)
@@ -166,7 +167,11 @@ Documentação interativa: `GET /api/docs` (Swagger).
 |---|---|---|
 | GET | `/opportunities/themes` | Catálogo de temas/narrativas |
 | GET | `/opportunities/cycles` | Ciclos históricos e lições |
-| GET | `/opportunities/radar` | Atenção + tendência + último brief por tema |
+| GET | `/opportunities/radar?mode=` | Atenção + tendência + último brief do modo por tema |
+| GET | `/opportunities/current-cycle` | Último resumo do ciclo atual |
+| POST | `/opportunities/current-cycle/refresh` | Regenera o resumo a partir de todas as análises (+ cron semanal 2ª 9h) |
+| GET | `/opportunities/action-tips` | Último digest de dicas de ação |
+| POST | `/opportunities/action-tips/refresh` | Gera dicas a partir do estado do radar (+ cron semanal 2ª 9h) |
 | GET | `/opportunities?theme=` | Briefs gerados |
 | POST | `/opportunities/:theme/analyze` | Gera análise (`{ mode: growth\|conservative }`) |
 

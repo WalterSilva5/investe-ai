@@ -116,7 +116,7 @@ interface NavItem {
     </ng-template>
 
     <ng-template #userBlock>
-      @if (auth.localMode()) {
+      @if (auth.openMode()) {
         <div class="who">Modo local — sem login</div>
       } @else {
         <div class="who">{{ auth.user()?.email }}</div>

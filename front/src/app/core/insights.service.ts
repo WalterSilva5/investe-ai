@@ -41,4 +41,8 @@ export class InsightsService {
   markAllRead() {
     return this.api.post<{ updated: number }>('/insights/read-all', {});
   }
+
+  markRead(id: string) {
+    return this.api.patch<Insight>(`/insights/${id}/read`, {});
+  }
 }

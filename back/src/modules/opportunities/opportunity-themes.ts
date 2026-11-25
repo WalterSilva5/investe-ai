@@ -134,6 +134,71 @@ export const OPPORTUNITY_THEMES: OpportunityTheme[] = [
       'O risco de falha clínica está precificado?',
     ],
   },
+  {
+    slug: 'agro',
+    name: 'Agro e commodities agrícolas',
+    icon: '🌾',
+    description: 'Soja, milho, café, açúcar, clima e ciclo de grãos.',
+    keywords: ['agronegócio', 'agronegocio', 'safra', 'soja', 'milho', 'café', 'acucar', 'açúcar', 'algodão', 'algodao', 'seca no campo', 'el niño', 'el nino', 'slc agrícola'],
+    assets: ['SLCE3', 'SMTO3', 'B3: agro'],
+    questions: [
+      'O preço está em ciclo de alta ou de baixa?',
+      'O clima (seca/chuva) já está no preço?',
+      'A margem do produtor cobre o custo?',
+    ],
+  },
+  {
+    slug: 'bancos',
+    name: 'Bancos e crédito',
+    icon: '🏦',
+    description: 'Bancões, inadimplência, spread e crédito privado.',
+    keywords: ['itaú', 'bradesco', 'nubank', 'banco do brasil', 'inadimplência', 'inadimplencia', 'spread bancário', 'spread bancario', 'crédito privado', 'credito privado', 'debênture', 'debenture'],
+    assets: ['ITUB4', 'BBDC4', 'BBAS3', 'ROXO34'],
+    questions: [
+      'A inadimplência está subindo ou estabilizando?',
+      'O lucro vem de crédito saudável ou de tesouraria?',
+      'Juros altos ajudam (spread) ou atrapalham (calote)?',
+    ],
+  },
+  {
+    slug: 'fiis',
+    name: 'FIIs e mercado imobiliário',
+    icon: '🏢',
+    description: 'Fundos imobiliários, tijolo vs papel, IFIX e juros.',
+    keywords: ['fundo imobiliário', 'fundo imobiliario', 'ifix', 'fii', 'tijolo', 'galpão logístico', 'galpao logistico', 'vacância', 'vacancia'],
+    assets: ['HGLG11', 'MXRF11', 'IFIX'],
+    questions: [
+      'O dividend yield está acima do CDI por risco real ou armadilha?',
+      'Vacância e inadimplência dos inquilinos: como estão?',
+      'Queda de juros ajuda; alta prolongada pune — onde estamos no ciclo?',
+    ],
+  },
+  {
+    slug: 'petroleo-mineracao',
+    name: 'Petróleo, gás e mineração',
+    icon: '🛢️',
+    description: 'Petrobras, pré-sal, minério de ferro, OPEP e dividendos.',
+    keywords: ['petrobras', 'petróleo', 'petroleo', 'pré-sal', 'pre-sal', 'minério de ferro', 'minerio de ferro', 'opep', 'barril', 'diesel', 'gasolina', 'política de preços da petrobras'],
+    assets: ['PETR4', 'VALE3', 'PRIO3'],
+    questions: [
+      'O preço da commodity sustenta o dividendo?',
+      'Há risco político/estatal na tese (interferência, mudança de regra)?',
+      'Ciclo global (China, OPEP) ajuda ou atrapalha?',
+    ],
+  },
+  {
+    slug: 'consumo-varejo',
+    name: 'Consumo e varejo',
+    icon: '🛒',
+    description: 'Varejo, e-commerce, shoppings e consumo das famílias.',
+    keywords: ['varejo', 'magalu', 'magazine luiza', 'casas bahia', 'consumo das famílias', 'consumo das familias', 'shopping', 'e-commerce', 'ecommerce', 'black friday', 'endividamento das famílias'],
+    assets: ['MGLU3', 'BHIA3', 'LREN3'],
+    questions: [
+      'O consumo está acelerando ou o endividamento trava?',
+      'A empresa ganha share ou só acompanha o setor?',
+      'Juros e desemprego: vento a favor ou contra?',
+    ],
+  },
 ];
 
 export function findOpportunityTheme(slug: string): OpportunityTheme | undefined {

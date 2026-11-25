@@ -69,6 +69,8 @@ model Tenant {
   insights     Insight[]
   statements   BankStatement[]
   opportunityBriefs OpportunityBrief[]
+  cycleSummaries CycleSummary[]
+  actionDigests ActionDigest[]
   businessProfile BusinessProfile?
   businessIdeas BusinessIdea[]
 }
@@ -147,6 +149,8 @@ model Conversation {
   title      String?
   providerId String?
   model      String?
+  summary    String?
+  summaryCount Int    @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -610,4 +614,37 @@ model BusinessIdea {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
+}
+
+model CycleSummary {
+  id            String   @id @default(cuid())
+  tenantId      String
+  title         String
+  summary       String
+  dominantStage String   @default("EMERGENTE")
+  topThemes     Json?
+  risks         Json?
+  watchPoints   Json?
+  providerId    String?
+  model         String?
+  generatedAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, generatedAt])
+}
+
+model ActionDigest {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  summary     String
+  actions     Json?
+  providerId  String?
+  model       String?
+  generatedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, generatedAt])
 }

@@ -166,7 +166,7 @@ export class LoginComponent {
   constructor() {
     // Modo local: pula o login e vai direto ao app.
     effect(() => {
-      if (this.auth.localMode()) this.router.navigate(['/app/overview']);
+      if (this.auth.openMode()) this.router.navigate(['/app/overview']);
     });
   }
 

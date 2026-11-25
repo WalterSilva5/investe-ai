@@ -72,6 +72,20 @@ cd ../front && npm install && npm start -- --host 0.0.0.0
 - **API:** http://localhost:3000/api
 - **Swagger:** http://localhost:3000/api/docs
 
+## Prints
+
+| Visão geral | Carteira |
+|---|---|
+| ![Visão geral](docs/prints/01-visao-geral.jpeg) | ![Carteira](docs/prints/02-carteira.jpeg) |
+
+| Análise (aporte do dia) | Chat do agente |
+|---|---|
+| ![Análise](docs/prints/03-analise.jpeg) | ![Chat](docs/prints/04-chat.jpeg) |
+
+| Diário | Radar de oportunidades |
+|---|---|
+| ![Diário](docs/prints/05-diario.jpeg) | ![Radar](docs/prints/06-radar.jpeg) |
+
 ## Estrutura
 
 ```

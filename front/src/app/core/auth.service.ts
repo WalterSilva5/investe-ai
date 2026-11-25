@@ -28,33 +28,45 @@ export class AuthService {
   readonly user = signal<AuthUser | null>(this.readUser());
   readonly tenantId = signal<string | null>(localStorage.getItem('wsi.tenantId'));
   readonly memberships = signal<Membership[]>([]);
-  /** Modo local (LOCAL_MODE=true no back): sem cadastro/login. */
-  readonly localMode = signal(false);
+  /**
+   * Ambiente aberto (AUTH_ENABLED=false no back, padrão): entra direto,
+   * sem cadastro/login — assume app rodando localmente.
+   */
+  readonly openMode = signal(false);
   readonly isAuthenticated = computed(
-    () => this.localMode() || Boolean(this.user() && this.tenantId()),
+    () => this.openMode() || Boolean(this.user() && this.tenantId()),
   );
 
+  /** Resolvida após descobrir o modo do ambiente (para o guard não correr). */
+  readonly ready: Promise<void>;
+  private resolveReady!: () => void;
+
   constructor() {
-    this.checkLocalMode();
+    this.ready = new Promise<void>((resolve) => {
+      this.resolveReady = resolve;
+    });
+    this.checkOpenMode();
     if (localStorage.getItem('wsi.accessToken')) {
       this.refreshSession();
     }
   }
 
-  /** Consulta /health (público) para saber se o back está em modo local. */
-  checkLocalMode() {
-    this.api.get<{ localMode: boolean }>('/health').subscribe({
+  /** Consulta /health (público) para saber se o ambiente exige autenticação. */
+  checkOpenMode() {
+    this.api.get<{ authEnabled?: boolean; localMode?: boolean }>('/health').subscribe({
       next: (res) => {
-        if (res?.localMode) {
-          this.localMode.set(true);
+        const open = res?.authEnabled === false || (res?.authEnabled === undefined && res?.localMode === true);
+        if (open) {
+          this.openMode.set(true);
           if (!this.user()) {
             const localUser: AuthUser = { id: 'local', email: 'local@wsi.local', name: 'Local' };
             this.user.set(localUser);
           }
           this.refreshMemberships();
         }
+        this.resolveReady();
       },
-      error: () => undefined,
+      error: () => this.resolveReady(),
     });
   }
 
@@ -116,8 +128,8 @@ export class AuthService {
         }
       },
       error: () => {
-        // Em modo local o /auth/me não exige sessão; não derruba o acesso.
-        if (!this.localMode()) this.logout();
+        // Em modo aberto o /auth/me não exige sessão; não derruba o acesso.
+        if (!this.openMode()) this.logout();
       },
     });
   }

@@ -6,9 +6,10 @@ export const LOCAL_USER_EMAIL = 'local@wsi.local';
 export const LOCAL_TENANT_SLUG = 'local';
 
 /**
- * Modo local: uso sem cadastro/login.
- * Ativo por padrão (LOCAL_MODE=true). Para deploy aberto com contas,
- * defina LOCAL_MODE=false.
+ * Modo aberto: uso sem cadastro/login (padrão para uso pessoal local).
+ * Controlado por AUTH_ENABLED (padrão: false = aberto). Para deploy aberto
+ * com contas, defina AUTH_ENABLED=true. LOCAL_MODE é alias legado
+ * (LOCAL_MODE=true equivale a AUTH_ENABLED=false).
  */
 @Injectable()
 export class LocalModeService {
@@ -17,9 +18,19 @@ export class LocalModeService {
     private readonly prisma: PrismaService,
   ) {}
 
+  /** true = ambiente aberto, sem autenticação. */
   isEnabled(): boolean {
-    const raw = (this.config.get<string>('LOCAL_MODE') ?? 'true').toLowerCase().trim();
-    return raw === 'true' || raw === '1' || raw === 'yes';
+    const auth = this.config.get<string>('AUTH_ENABLED');
+    if (auth !== undefined && auth !== null && String(auth).trim() !== '') {
+      const v = String(auth).toLowerCase().trim();
+      return !(v === 'true' || v === '1' || v === 'yes');
+    }
+    const legacy = (this.config.get<string>('LOCAL_MODE') ?? 'true').toLowerCase().trim();
+    return legacy === 'true' || legacy === '1' || legacy === 'yes';
+  }
+
+  isAuthEnabled(): boolean {
+    return !this.isEnabled();
   }
 
   async ensureLocalContext(): Promise<{ userId: string; tenantId: string; email: string }> {

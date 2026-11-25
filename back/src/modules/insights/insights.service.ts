@@ -12,13 +12,16 @@ import { DocumentsService } from '../documents/documents.service';
 const INSIGHT_PROMPT = `Você gera "insights" diários para um investidor pessoa física no Brasil.
 Regras obrigatórias:
 - Use APENAS os dados fornecidos no contexto. Nunca invente números.
+- Dados oficiais (BCB, governo) são ponto de partida, não veredito: apresente-os como "dado oficial" e, quando o comportamento do mercado (juros, câmbio) divergir, diga isso e mencione risco fiscal/inflacionário.
 - NÃO recomende compra ou venda, NÃO preveja preço, NÃO prometa retorno.
 - Tom educacional; deixe claro que não é recomendação de investimento.
 - Foque no que é acionável: o que observar, o que acompanhar, riscos e contexto.
 
-Responda APENAS um JSON válido (sem markdown, sem comentários) com um array de 3 a 5 objetos:
+Responda APENAS um JSON válido (sem markdown, sem comentários) com um array de 6 a 8 objetos,
+cobrindo as categorias relevantes do contexto (macro, renda fixa, ações, cripto e carteira):
 [{"category":"MACRO|RENDA_FIXA|ACOES|CRIPTO|CARTEIRA","title":"...","content":"...","relatedSources":[0,2]}]
-"relatedSources" são os índices (base 0) das notícias usadas no insight.`;
+"relatedSources" são os índices (base 0) das notícias usadas no insight. Se alguma categoria não tiver
+novidade relevante, distribua os itens entre as demais em vez de forçar.`;
 
 const DIARY_PROMPT = `Você gera "dicas do diário" a partir das anotações de um investidor pessoa física no Brasil.
 Regras obrigatórias:
@@ -124,7 +127,8 @@ export class InsightsService {
       ],
       // Orçamento folgado: modelos com raciocínio consomem tokens antes do
       // conteúdo; com limite curto a resposta vinha vazia (finishReason=length).
-      { model: resolved.model, temperature: 0.4, maxTokens: 4000 },
+      // 6–8 insights precisam de mais espaço que o lote antigo de 3–5.
+      { model: resolved.model, temperature: 0.4, maxTokens: 6000 },
     );
 
     const raw = this.parseJson(result.content);
@@ -299,18 +303,52 @@ export class InsightsService {
   }
 
   private parseJson(content: string): RawInsight[] {
+    const arrayText = this.extractArrayText(content);
+    if (!arrayText) return [];
+
+    const direct = this.tryParseArray(arrayText);
+    if (direct) return direct;
+
+    // Modelos costumam emitir quebras de linha literais dentro das strings
+    // (JSON inválido) ou vírgulas finais — repara e tenta de novo.
+    const repaired = this.repairJson(arrayText);
+    const retry = this.tryParseArray(repaired);
+    if (retry?.length) {
+      this.logger.log('Insights: JSON reparado (controles literais/vírgulas finais).');
+      return retry;
+    }
+
+    // Último recurso: salva os objetos individualmente válidos.
+    const partial = this.extractValidObjects(repaired);
+    if (partial.length) {
+      this.logger.warn(`Insights: parse parcial — ${partial.length} item(ns) aproveitados.`);
+    } else {
+      this.logger.warn(
+        `Falha ao parsear insights. Amostra: ${content.slice(0, 200).replace(/\s+/g, ' ')}`,
+      );
+    }
+    return partial;
+  }
+
+  private extractArrayText(content: string): string | null {
+    const trimmed = content
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/, '')
+      .trim();
+    const start = trimmed.indexOf('[');
+    const end = trimmed.lastIndexOf(']');
+    if (start === -1 || end === -1 || end <= start) return null;
+    return trimmed.slice(start, end + 1);
+  }
+
+  private tryParseArray(text: string): RawInsight[] | null {
     try {
-      const trimmed = content
-        .trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/, '')
-        .trim();
-      const start = trimmed.indexOf('[');
-      const end = trimmed.lastIndexOf(']');
-      if (start === -1 || end === -1 || end <= start) return [];
-      const parsed = JSON.parse(trimmed.slice(start, end + 1));
+      const parsed = JSON.parse(text) as unknown;
       if (Array.isArray(parsed)) {
-        return parsed.filter((item) => item && typeof item === 'object');
+        return (parsed as unknown[]).filter(
+          (item): item is RawInsight => !!item && typeof item === 'object',
+        );
       }
       if (
         parsed &&
@@ -319,10 +357,78 @@ export class InsightsService {
       ) {
         return (parsed as { insights: RawInsight[] }).insights;
       }
-      return [];
-    } catch (error) {
-      this.logger.warn(`Falha ao parsear insights: ${(error as Error).message}`);
-      return [];
+      return null;
+    } catch {
+      return null;
     }
+  }
+
+  private repairJson(text: string): string {
+    let out = '';
+    let inStr = false;
+    let esc = false;
+    for (const ch of text) {
+      if (esc) {
+        out += ch;
+        esc = false;
+        continue;
+      }
+      if (ch === '\\') {
+        out += ch;
+        if (inStr) esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = !inStr;
+        out += ch;
+        continue;
+      }
+      if (inStr && ch < ' ') {
+        out += ' ';
+        continue;
+      }
+      out += ch;
+    }
+    return out.replace(/,(\s*[}\]])/g, '$1');
+  }
+
+  private extractValidObjects(text: string): RawInsight[] {
+    const items: RawInsight[] = [];
+    let depth = 0;
+    let start = -1;
+    let inStr = false;
+    let esc = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === '\\' && inStr) {
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = !inStr;
+        continue;
+      }
+      if (inStr) continue;
+      if (ch === '{') {
+        if (depth === 0) start = i;
+        depth += 1;
+      } else if (ch === '}') {
+        depth -= 1;
+        if (depth === 0 && start >= 0) {
+          try {
+            const obj = JSON.parse(text.slice(start, i + 1)) as unknown;
+            if (obj && typeof obj === 'object') items.push(obj as RawInsight);
+          } catch {
+            // objeto individual inválido — ignora e segue
+          }
+          start = -1;
+        }
+      }
+    }
+    return items;
   }
 }

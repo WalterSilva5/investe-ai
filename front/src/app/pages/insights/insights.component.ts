@@ -75,6 +75,11 @@ const CATEGORIES: Category[] = [
             </div>
             <div class="insight-title">{{ insight.title }}</div>
             <div class="insight-body">{{ insight.content }}</div>
+            @if (!insight.isRead) {
+              <div style="margin-top:8px">
+                <button class="chip" (click)="markRead(insight.id)">Marcar como lida</button>
+              </div>
+            }
             @if (insight.sources?.length) {
               <div class="insight-sources">
                 <span class="muted small">Fontes:</span>
@@ -151,6 +156,17 @@ export class InsightsComponent {
     this.service.markAllRead().subscribe({
       next: () => {
         this.load();
+        this.service.refreshUnread();
+      },
+    });
+  }
+
+  markRead(id: string) {
+    this.service.markRead(id).subscribe({
+      next: () => {
+        this.insights.update((items) =>
+          items.map((item) => (item.id === id ? { ...item, isRead: true } : item)),
+        );
         this.service.refreshUnread();
       },
     });
