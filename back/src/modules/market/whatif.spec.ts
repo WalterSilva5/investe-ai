@@ -1,4 +1,4 @@
-import { cdiFinalValue, irrAnnualPct, whatifRun } from './whatif';
+import { cdiFinalValue, forwardScenario, irrAnnualPct, whatifRun } from './whatif';
 
 describe('whatif (simulador de passado)', () => {
   // 60 pregões: preço sobe de 10 para 20 no meio e volta a 15.
@@ -41,6 +41,28 @@ describe('whatif (simulador de passado)', () => {
   it('amount inválido → null', () => {
     const pts = points(60, () => 10);
     expect(whatifRun({ points: pts, amount: 0 })).toBeNull();
+  });
+});
+
+describe('forwardScenario', () => {
+  const points = Array.from({ length: 750 }, (_, i) => {
+    const year = 2024 + Math.floor(i / 250);
+    const month = String(Math.floor((i % 250) / 21) + 1).padStart(2, '0');
+    return { date: `${year}-${month}-15`, close: 100 * Math.pow(1.15, i / 250) * (1 + 0.06 * Math.sin(i / 7)) };
+  });
+
+  it('otimista > base > pessimista, e chance histórica calculada', () => {
+    const f = forwardScenario({ points, investedValueNow: 2000, irrPct: 15 });
+    expect(f).not.toBeNull();
+    expect(f!.optimisticValue).toBeGreaterThan(f!.baseValue);
+    expect(f!.baseValue).toBeGreaterThan(f!.pessimisticValue);
+    expect(f!.basePct).toBeCloseTo(15, 1);
+    expect(f!.probPositive12mPct).not.toBeNull();
+    expect(f!.yearsSampled).toBeGreaterThanOrEqual(2);
+  });
+
+  it('histórico curto demais → null', () => {
+    expect(forwardScenario({ points: points.slice(0, 30), investedValueNow: 1000, irrPct: 10 })).toBeNull();
   });
 });
 

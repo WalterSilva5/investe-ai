@@ -160,6 +160,112 @@ export function irrAnnualPct(
 }
 
 /**
+ * Projeção de cenários para o futuro (12 meses) a partir do PRÓPRIO histórico
+ * do papel: retornos anuais realizados, volatilidade anual e frequência
+ * histórica de retorno positivo. Cenário estatístico, não promessa — o
+ * passado não garante o futuro e a projeção assume que o regime se mantém.
+ */
+export interface ForwardScenario {
+  horizonMonths: number;
+  pessimisticPct: number;
+  basePct: number;
+  optimisticPct: number;
+  pessimisticValue: number;
+  baseValue: number;
+  optimisticValue: number;
+  /** % de anos (ou janelas de 12m) com retorno positivo no histórico. */
+  probPositive12mPct: number | null;
+  yearsSampled: number;
+  annualVolPct: number;
+}
+
+export function forwardScenario(input: {
+  points: Array<{ date: string; close: number }>;
+  investedValueNow: number;
+  irrPct: number | null;
+  horizonMonths?: number;
+}): ForwardScenario | null {
+  const { points, investedValueNow, irrPct } = input;
+  const horizon = Math.max(1, Math.min(60, input.horizonMonths ?? 12));
+  if (points.length < 60 || investedValueNow <= 0) return null;
+
+  // Retornos anuais realizados (fechamento do 1º pregão de cada ano).
+  const firstByYear = new Map<string, number>();
+  for (const p of points) {
+    const year = p.date.slice(0, 4);
+    if (!firstByYear.has(year)) firstByYear.set(year, p.close);
+  }
+  const years = [...firstByYear.keys()].sort();
+  const yearlyReturns: number[] = [];
+  for (let i = 1; i < years.length; i += 1) {
+    const prev = firstByYear.get(years[i - 1])!;
+    const curr = firstByYear.get(years[i])!;
+    if (prev > 0) yearlyReturns.push((curr / prev - 1) * 100);
+  }
+
+  // Volatilidade anual do papel (retornos diários).
+  const daily: number[] = [];
+  for (let i = 1; i < points.length; i += 1) {
+    if (points[i - 1].close > 0) daily.push(points[i].close / points[i - 1].close - 1);
+  }
+  const meanDaily = daily.reduce((a, b) => a + b, 0) / daily.length;
+  const varianceDaily =
+    daily.reduce((acc, r) => acc + (r - meanDaily) * (r - meanDaily), 0) / (daily.length - 1);
+  const annualVol = Math.sqrt(varianceDaily) * Math.sqrt(252) * 100;
+
+  // Probabilidade histórica de retorno positivo em 12m.
+  let probPositive: number | null = null;
+  if (yearlyReturns.length >= 3) {
+    const positives = yearlyReturns.filter((r) => r > 0).length;
+    probPositive = Math.round((positives / yearlyReturns.length) * 100);
+  } else if (points.length >= 504) {
+    // Janela de 12 meses deslizante (degraus mensais).
+    let positives = 0;
+    let total = 0;
+    for (let i = 252; i < points.length; i += 21) {
+      total += 1;
+      if (points[i].close > points[i - 252].close) positives += 1;
+    }
+    if (total >= 6) probPositive = Math.round((positives / total) * 100);
+  }
+
+  const meanYearly = yearlyReturns.length
+    ? yearlyReturns.reduce((a, b) => a + b, 0) / yearlyReturns.length
+    : null;
+  const sdYearly =
+    yearlyReturns.length >= 3
+      ? Math.sqrt(
+          yearlyReturns.reduce((acc, r) => acc + (r - meanYearly!) ** 2, 0) /
+            (yearlyReturns.length - 1),
+        )
+      : annualVol;
+  const horizonYears = horizon / 12;
+  const base = irrPct ?? meanYearly ?? 0;
+  // Vol escala com √tempo.
+  const scaled = (band: number) => {
+    const totalPct = band * Math.sqrt(horizonYears) * (1 + horizonYears * 0);
+    const value = round2(investedValueNow * (1 + totalPct / 100));
+    return { pct: round2(totalPct), value };
+  };
+  const pessimistic = scaled(base - sdYearly);
+  const baseRun = scaled(base);
+  const optimistic = scaled(base + sdYearly);
+
+  return {
+    horizonMonths: horizon,
+    pessimisticPct: pessimistic.pct,
+    basePct: baseRun.pct,
+    optimisticPct: optimistic.pct,
+    pessimisticValue: pessimistic.value,
+    baseValue: baseRun.value,
+    optimisticValue: optimistic.value,
+    probPositive12mPct: probPositive,
+    yearsSampled: years.length - 1,
+    annualVolPct: round2(annualVol),
+  };
+}
+
+/**
  * Valor final de uma aplicação em CDI: cada aporte cresce pela taxa diária
  * acumulada do BCB entre a data do aporte e o fim da janela.
  */

@@ -145,7 +145,7 @@ sem push automático).
 |---|---|
 | ![Ensino](docs/prints/15-ensino.jpeg) | ![Finanças](docs/prints/16-financas.jpeg) |
 
-| Simulador de passado | Paper trading |
+| Simulador | Paper trading |
 |---|---|
 | ![Simulador](docs/prints/17-simulador.jpeg) | ![Paper](docs/prints/18-paper.jpeg) |
 

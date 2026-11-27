@@ -33,6 +33,18 @@ interface WhatIfResult {
   years: YearRow[];
   curve: Array<{ date: string; value: number; invested: number }>;
   cdi: { totalInvested: number; finalValue: number } | null;
+  forward?: {
+    horizonMonths: number;
+    pessimisticPct: number;
+    basePct: number;
+    optimisticPct: number;
+    pessimisticValue: number;
+    baseValue: number;
+    optimisticValue: number;
+    probPositive12mPct: number | null;
+    yearsSampled: number;
+    annualVolPct: number;
+  } | null;
 }
 
 interface PortfolioResult {
@@ -96,11 +108,12 @@ interface StrategyResult {
     MarkdownPipe,
   ],
   template: `
-    <h1 class="page-title">Simulador de passado</h1>
+    <h1 class="page-title">Simulador</h1>
     <p class="page-sub">
-      "Se eu tivesse investido R$ X há N anos neste ativo, quanto teria hoje?" — compra no primeiro
-      pregão, aportes mensais opcionais, comparação com o CDI real do período (BCB). Retrospectiva:
-      o padrão passado não garante resultado futuro.
+      "Se eu tivesse investido R$ X há N anos neste ativo, quanto teria hoje?" — o passado com
+      compra no primeiro pregão, aportes mensais e comparativo com o CDI real (BCB) — e o
+      <strong>futuro</strong> como cenários estatísticos baseados no próprio histórico do papel.
+      Estatística não é promessa: o passado não garante o futuro.
     </p>
 
     <p-card styleClass="mt-card">
@@ -228,6 +241,44 @@ interface StrategyResult {
               </p>
             }
           </p-card>
+
+          @if (r.forward; as f) {
+            <p-card header="🔮 E o futuro? (cenários para 12 meses)" styleClass="mt-card">
+              <div class="cards">
+                <p-card>
+                  <div class="stat-label">📉 Pessimista</div>
+                  <div class="stat-value" style="color:var(--danger)">
+                    {{ money(f.pessimisticValue, r.currency) }}
+                  </div>
+                  <div class="stat-hint">{{ f.pessimisticPct }}% · vol anual {{ f.annualVolPct }}%</div>
+                </p-card>
+                <p-card>
+                  <div class="stat-label">➡️ Base (IRR histórica)</div>
+                  <div class="stat-value">{{ money(f.baseValue, r.currency) }}</div>
+                  <div class="stat-hint">{{ f.basePct }}% · {{ f.yearsSampled }} anos de amostra</div>
+                </p-card>
+                <p-card>
+                  <div class="stat-label">📈 Otimista</div>
+                  <div class="stat-value" style="color:var(--success)">
+                    {{ money(f.optimisticValue, r.currency) }}
+                  </div>
+                  <div class="stat-hint">{{ f.optimisticPct }}% · banda de 1 desvio-padrão</div>
+                </p-card>
+              </div>
+              @if (f.probPositive12mPct != null) {
+                <p class="small" style="margin:8px 0 0">
+                  Chance histórica de retorno positivo em 12 meses neste papel:
+                  <strong>{{ f.probPositive12mPct }}%</strong>
+                  (frequência nos últimos {{ f.yearsSampled }} anos)
+                </p>
+              }
+              <p class="disclaimer" style="margin:8px 0 0">
+                Projeção estatística baseada no próprio histórico (retornos anuais e volatilidade),
+                assumindo que o regime se mantém. NÃO é previsão nem promessa: choques, mudanças de
+                regime e caudas não aparecem em média. Conteúdo educacional.
+              </p>
+            </p-card>
+          }
 
           @if (strategy(); as s) {
             <p-card header="🎯 Seguindo o agente (análise mensal)" styleClass="mt-card">

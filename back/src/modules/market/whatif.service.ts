@@ -3,6 +3,7 @@ import { MacroService } from './macro.service';
 import { QuotesService, CRYPTO_IDS } from './quotes.service';
 import {
   cdiFinalValue,
+  forwardScenario,
   irrAnnualPct,
   whatifRun,
   WhatIfResult,
@@ -67,6 +68,14 @@ export class WhatIfService {
       }
     }
 
+    // Projeção de cenários (12 meses à frente, estatística do próprio histórico).
+    const forward = forwardScenario({
+      points,
+      investedValueNow: result.finalValue,
+      irrPct: result.annualizedPct,
+      horizonMonths: 12,
+    });
+
     return {
       symbol: resolved,
       currency,
@@ -75,8 +84,9 @@ export class WhatIfService {
       months: monthsEffective,
       ...result,
       cdi,
+      forward,
       note:
-        'Retrospectiva com dados históricos: compra no primeiro pregão e aportes mensais no primeiro pregão de cada mês. O padrão passado não garante resultado futuro.',
+        'Retrospectiva com dados históricos: compra no primeiro pregão e aportes mensais no primeiro pregão de cada mês. A projeção de cenários é estatística (retornos anuais e volatilidade do próprio papel) — não é promessa nem recomendação; o passado não garante o futuro.',
     };
   }
 

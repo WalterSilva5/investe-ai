@@ -226,7 +226,7 @@ export class ShellComponent {
       title: 'Mercado & análise',
       items: [
         { path: '/app/analysis', label: 'Análise', icon: 'pi-chart-line' },
-        { path: '/app/whatif', label: 'Simulador de passado', icon: 'pi-replay' },
+        { path: '/app/whatif', label: 'Simulador', icon: 'pi-replay' },
         { path: '/app/fixed-income', label: 'Renda fixa', icon: 'pi-percentage' },
         { path: '/app/discovery', label: 'Descobertas', icon: 'pi-search' },
         { path: '/app/paper', label: 'Paper trading', icon: 'pi-money-bill' },
