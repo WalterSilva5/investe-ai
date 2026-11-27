@@ -158,7 +158,9 @@ Simulação de ordens: sem dinheiro real e sem execução em corretora. O ciclo 
 | GET | `/prompts/sim/results` | Runs recentes do backtest de prompts por classe de ativo |
 | GET | `/prompts/sim/best` | Melhor variante de prompt por classe (pela nota do backtest) |
 | POST | `/prompts/sim/run` | Roda a matriz de simulação: âncoras no passado × variantes × classes (leva minutos) |
-| GET | `/market/whatif` | Simulador de passado: valor inicial + aporte mensal + janela → valor final, lucro, ROI, anualizada, drawdown, ano a ano e comparativo CDI |
+| GET | `/market/whatif` | Simulador de passado: valor inicial + aporte mensal + janela → valor final, lucro, ROI, anualizada (IRR), drawdown, ano a ano e comparativo CDI |
+| GET | `/market/whatif-strategy` | Simulador "seguindo o agente": análises mensais com a régua do veredito (Oportunidade compra, Evitar zera) → estratégia vs compra-e-segura vs CDI, sinais e operações |
+| POST | `/market/whatif-portfolio` | Simulador de passado DIVERSIFICADO: pernas `{symbol, amount, monthly?}` → resultado por perna + total combinado + CDI |
 | GET | `/finance/summary` | Caixa pessoal + empresa, reserva, disponível para investir, excedente mensal e runway |
 | PATCH | `/finance/books/:id` | Atualiza caixa/reserva/label de um livro financeiro |
 | POST | `/finance/books/:id/entries` | Lança receita/despesa no livro |

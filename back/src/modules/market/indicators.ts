@@ -5,6 +5,23 @@
  * Nada aqui prevê preço: só descreve o passado.
  */
 
+/**
+ * Regras de sinal do agente (fonte única — quotes.service.verdictFor e o
+ * simulador de estratégia usam a MESMA régua).
+ */
+export type AgentSignal = 'Oportunidade' | 'Aguardar' | 'Evitar';
+
+export function agentSignal(read: {
+  score: number;
+  trend: 'alta' | 'baixa' | 'lateral';
+  ratio: number | null;
+}): AgentSignal {
+  const ratio = read.ratio ?? 0;
+  if (read.score >= 65 && ratio >= 1.2) return 'Oportunidade';
+  if (read.score <= 35 || (read.trend === 'baixa' && ratio < 0.5)) return 'Evitar';
+  return 'Aguardar';
+}
+
 export function movingAverage(closes: number[], period: number): number | null {
   if (period <= 0 || closes.length < period) return null;
   const slice = closes.slice(-period);

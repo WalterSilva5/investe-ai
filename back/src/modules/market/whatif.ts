@@ -67,10 +67,18 @@ export function whatifRun(input: WhatIfInput): WhatIfResult | null {
   const totalInvested = curve[curve.length - 1].invested;
   const yearsElapsed = curve.length / 252;
   const roi = (finalValue / totalInvested - 1) * 100;
-  const annualized =
-    totalInvested > 0 && finalValue > 0 && yearsElapsed > 0.5
-      ? (Math.pow(finalValue / totalInvested, 1 / yearsElapsed) - 1) * 100
-      : roi / Math.max(1, yearsElapsed);
+  // Anualizada via IRR (cada aporte descontado no mês em que entrou) — a
+  // fórmula simples infla o número quando há aportes mensais.
+  const contributions = curve.slice(1).reduce<Array<{ date: string; amount: number }>>(
+    (acc, c, i) => {
+      const delta = round2(c.invested - curve[i].invested);
+      if (delta > 0) acc.push({ date: c.date, amount: delta });
+      return acc;
+    },
+    [{ date: curve[0].date, amount: round2(curve[0].invested) }],
+  );
+  const irr = irrAnnualPct(contributions, finalValue, curve[curve.length - 1].date);
+  const annualized = irr ?? roi / Math.max(1, yearsElapsed);
 
   // Drawdown sobre o valor de mercado (não sobre o aporte).
   let peak = curve[0].value;
@@ -109,6 +117,46 @@ function yearBreakdown(curve: Array<{ date: string; value: number; invested: num
     invested: round2(row.invested),
     value: round2(row.value),
   }));
+}
+
+/**
+ * IRR anualizada (retorno ponderado pelo dinheiro): resolve a taxa que desconta
+ * cada aporte no mês em que ele entrou e o valor final no fim. Honesta com
+ * aportes mensais — a fórmula simples (final/investido) infla o número.
+ */
+export function irrAnnualPct(
+  contributions: Array<{ date: string; amount: number }>,
+  finalValue: number,
+  endDate: string,
+): number | null {
+  if (!contributions.length || finalValue <= 0) return null;
+  // Meses absolutos a partir do primeiro aporte.
+  const monthDiff = (from: string, to: string): number => {
+    const [fy, fm] = from.split('-').map(Number);
+    const [ty, tm] = to.split('-').map(Number);
+    return (ty - fy) * 12 + (tm - fm);
+  };
+  const start = contributions.map((c) => c.date).sort()[0];
+  const months = contributions.map((c) => ({ t: monthDiff(start, c.date), amount: c.amount }));
+  const n = monthDiff(start, endDate);
+  if (n < 1 || months.some((m) => m.t < 0)) return null;
+
+  const f = (rate: number): number => {
+    let pv = 0;
+    for (const c of months) pv -= c.amount / Math.pow(1 + rate, c.t);
+    return pv + finalValue / Math.pow(1 + rate, n);
+  };
+  // Bisseção: f(-0.9) > 0 (investido sem retorno) e f(2) < 0 (retorno absurdo).
+  let low = -0.9;
+  let high = 2;
+  if (f(low) * f(high) > 0) return null;
+  for (let i = 0; i < 80; i += 1) {
+    const mid = (low + high) / 2;
+    if (f(low) * f(mid) <= 0) high = mid;
+    else low = mid;
+  }
+  const rate = (low + high) / 2;
+  return round2((Math.pow(1 + rate, 12) - 1) * 100);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { cdiFinalValue, whatifRun } from './whatif';
+import { cdiFinalValue, irrAnnualPct, whatifRun } from './whatif';
 
 describe('whatif (simulador de passado)', () => {
   // 60 pregões: preço sobe de 10 para 20 no meio e volta a 15.
@@ -41,6 +41,29 @@ describe('whatif (simulador de passado)', () => {
   it('amount inválido → null', () => {
     const pts = points(60, () => 10);
     expect(whatifRun({ points: pts, amount: 0 })).toBeNull();
+  });
+});
+
+describe('irrAnnualPct', () => {
+  it('aporte único: 1000 → 1500 em 12 meses ≈ +50% a.a.', () => {
+    const irr = irrAnnualPct(
+      [{ date: '2025-01-01', amount: 1000 }],
+      1500,
+      '2026-01-01',
+    );
+    expect(irr).toBeCloseTo(50, 0);
+  });
+
+  it('aportes mensais: a.a. menor que o ROI simples dividido', () => {
+    // 12 aportes de 100 por 12 meses, dobra no fim (valor 2400 → ROI 100%).
+    const irr = irrAnnualPct(
+      Array.from({ length: 12 }, (_, i) => ({ date: `2025-${String(i + 1).padStart(2, '0')}-01`, amount: 100 })),
+      2400,
+      '2026-01-01',
+    );
+    // Dinheiro entrou ao longo do ano: a.a. real é BEM maior que (2400/1200)^(1/1)−1
+    expect(irr).toBeGreaterThan(100);
+    expect(irr).toBeLessThan(400);
   });
 });
 

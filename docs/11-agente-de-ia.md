@@ -131,6 +131,9 @@ Além das ferramentas de carteira, macro e criação de notas, o agente tem (per
 - `portfolio_backtest` — retrospectiva de uma alocação proposta (pesos fixos, 3-60 meses): retorno total/anualizado, vol, drawdown máximo, melhor/pior mês e retorno individual de cada componente.
 - `add_finance_entry` / `update_cash` — o agente registra receita/despesa e atualiza caixa/reserva pelo próprio chat.
 - `whatif_investment` — simulador de passado: "se eu tivesse investido R$ X há N anos em SYMBOL" → valor final, lucro, ROI, anualizada, drawdown, ano a ano e comparativo com o CDI real do período (série diária do BCB). Mesma conta da página **Simulador de passado** (`/app/whatif`).
+- `whatif_portfolio` — simulador de passado DIVERSIFICADO: pernas `{symbol, amount, monthly?}` → resultado por perna + total combinado por data em comum + CDI. Usado pelo chat embutido na página do simulador ("simule R$ 1.000 em PETR4 e R$ 2.000 em IVVB11 há 5 anos").
+- `whatif_strategy` — simulador "SEGUINDO O AGENTE": análises mensais no passado com a MESMA régua do veredito atual (Oportunidade = score ≥ 65 e ganho/risco ≥ 1,2 → investe o caixa; Evitar = score ≤ 35 ou baixa sem relação → zera a posição; Aguardar → mantém). Compara com compra-e-segura e CDI no mesmo fluxo. A régua vive em `market/indicators.ts` (fonte única usada pelo outlook e pelo simulador).
+- Anualizada correta com aportes mensais: **IRR** (cada aporte descontado no mês em que entrou) — a fórmula simples inflava o número.
 
 A matemática (alinhamento de séries, Pearson, backtest de pesos, juros compostos do CDI) é pura e testada (`ai/tool-math.ts`, `market/whatif.ts`).
 

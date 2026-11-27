@@ -10,6 +10,7 @@ import {
   rsi,
   setupStats,
   technicalReading,
+  agentSignal,
   SetupKind,
 } from './indicators';
 import { halvingContext } from './halving';
@@ -223,9 +224,7 @@ export class QuotesService {
     closes: number[],
   ): { signal: 'Oportunidade' | 'Aguardar' | 'Evitar'; headline: string; trigger: string; invalidation: string } {
     const ratio = read.ratio ?? 0;
-    let signal: 'Oportunidade' | 'Aguardar' | 'Evitar' = 'Aguardar';
-    if (read.score >= 65 && ratio >= 1.2) signal = 'Oportunidade';
-    else if (read.score <= 35 || (read.trend === 'baixa' && ratio < 0.5)) signal = 'Evitar';
+    const signal = agentSignal(read);
 
     const headline =
       signal === 'Oportunidade'

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AssetType } from '@prisma/client';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
@@ -38,6 +38,26 @@ export class MarketController {
       symbol || '',
       Number(amount) || 0,
       Number(months) || 12,
+      Number(monthly) || 0,
+    );
+  }
+
+  @Post('whatif-portfolio')
+  whatIfPortfolio(@Body() body: { legs?: Array<{ symbol: string; amount: number; monthly?: number }>; months?: number }) {
+    return this.whatif.portfolio(body?.legs || [], Number(body?.months) || 12);
+  }
+
+  @Get('whatif-strategy')
+  whatIfStrategy(
+    @Query('symbol') symbol: string,
+    @Query('amount') amount?: string,
+    @Query('months') months?: string,
+    @Query('monthly') monthly?: string,
+  ) {
+    return this.whatif.strategy(
+      symbol || '',
+      Number(amount) || 0,
+      Number(months) || 24,
       Number(monthly) || 0,
     );
   }

@@ -69,6 +69,52 @@ export class AiToolsService {
       {
         type: 'function',
         function: {
+          name: 'whatif_strategy',
+          description:
+            'Simulador de passado SEGUINDO O AGENTE: análises mensais no período (mesma régua do veredito — Oportunidade compra o caixa, Evitar zera a posição) e compara com compra-e-segura e CDI. Use para "e se eu tivesse seguido o agente em ITUB4 há 2 anos?".',
+          parameters: {
+            type: 'object',
+            properties: {
+              symbol: { type: 'string' },
+              amount: { type: 'number', description: 'caixa inicial em BRL' },
+              months: { type: 'number', description: 'janela (padrão 24; cripto máx 12)' },
+              monthly: { type: 'number', description: 'aporte mensal opcional' },
+            },
+            required: ['symbol', 'amount'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'whatif_portfolio',
+          description:
+            'Simulador de passado DIVERSIFICADO: várias pernas (símbolo + valor + aporte mensal opcional) e o resultado combinado — total investido, valor final, lucro, anualizada, drawdown e comparativo CDI. Use para "se eu tivesse investido R$ 1.000 em PETR4 e R$ 2.000 em IVVB11 há 5 anos".',
+          parameters: {
+            type: 'object',
+            properties: {
+              legs: {
+                type: 'array',
+                description: '1 a 8 pernas, cada uma {symbol, amount, monthly?}',
+                items: {
+                  type: 'object',
+                  properties: {
+                    symbol: { type: 'string' },
+                    amount: { type: 'number' },
+                    monthly: { type: 'number' },
+                  },
+                  required: ['symbol', 'amount'],
+                },
+              },
+              months: { type: 'number', description: 'janela (padrão 12; cripto máx 12)' },
+            },
+            required: ['legs'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'compare_assets',
           description:
             'Compara 2 a 4 ativos lado a lado (tendência, score, RSI, ganho/risco, volatilidade) e diz qual o cenário mais favorável do conjunto. Use em perguntas "X ou Y?".',
@@ -487,6 +533,10 @@ export class AiToolsService {
           return await this.cashPosition(tenantId);
         case 'whatif_investment':
           return await this.whatIfInvestment(args);
+        case 'whatif_portfolio':
+          return await this.whatIfPortfolio(args);
+        case 'whatif_strategy':
+          return await this.whatIfStrategy(args);
         case 'compare_assets':
           return await this.compareAssets(
             Array.isArray(args.symbols) ? (args.symbols as unknown[]).map(String) : [],
@@ -804,6 +854,74 @@ export class AiToolsService {
   }
 
   /** Leitura técnica do papel para o agente citar números ao opinar. */
+  /** Simulador de passado SEGUINDO O AGENTE (análises mensais). */
+  private async whatIfStrategy(args: Record<string, unknown>): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const symbol = String(args.symbol || '').trim();
+    const amount = Number(args.amount);
+    if (!symbol || !Number.isFinite(amount) || amount <= 0) {
+      return { result: { error: 'Informe symbol e amount (> 0).' } };
+    }
+    try {
+      const result = (await this.whatIf.strategy(
+        symbol,
+        amount,
+        Number(args.months) || 24,
+        Number(args.monthly) || 0,
+      )) as Record<string, unknown>;
+      // Mantém o contexto compacto: sinais resumidos (sem a curva completa).
+      const signals = Array.isArray(result.signals)
+        ? (result.signals as Array<Record<string, unknown>>).slice(-14).map((s) => ({
+            date: s.date,
+            signal: s.signal,
+            score: s.score,
+          }))
+        : [];
+      return {
+        result: { ...result, curve: undefined, signals, asOf },
+        citation: {
+          tool: 'whatif_strategy',
+          source: `histórico ${result.symbol} (${result.currency}) + CDI BCB`,
+          asOf,
+        },
+      };
+    } catch (error) {
+      return { result: { error: (error as Error).message.slice(0, 160) } };
+    }
+  }
+
+  /** Simulador de passado DIVERSIFICADO via WhatIfService.portfolio. */
+  private async whatIfPortfolio(args: Record<string, unknown>): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const rawLegs = Array.isArray(args.legs) ? args.legs : [];
+    const legs = rawLegs
+      .map((leg) => {
+        const entry = (leg ?? {}) as Record<string, unknown>;
+        return {
+          symbol: String(entry.symbol || '').trim().toUpperCase(),
+          amount: Number(entry.amount) || 0,
+          monthly: Number(entry.monthly) || 0,
+        };
+      })
+      .filter((leg) => leg.symbol && leg.amount > 0);
+    if (!legs.length) {
+      return { result: { error: 'Informe legs: [{symbol, amount, monthly?}].' } };
+    }
+    try {
+      const result = await this.whatIf.portfolio(legs, Number(args.months) || 12);
+      return {
+        result: { ...result, asOf },
+        citation: {
+          tool: 'whatif_portfolio',
+          source: 'histórico de preços + CDI BCB',
+          asOf,
+        },
+      };
+    } catch (error) {
+      return { result: { error: (error as Error).message.slice(0, 160) } };
+    }
+  }
+
   /** Simulador de passado via WhatIfService (mesmo cálculo da página). */
   private async whatIfInvestment(args: Record<string, unknown>): Promise<ToolExecution> {
     const asOf = new Date().toISOString();
