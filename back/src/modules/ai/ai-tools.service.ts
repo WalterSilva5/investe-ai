@@ -14,6 +14,7 @@ import { classifySymbol } from '../prompts/sim/asset-classes';
 import { FinanceService } from '../finance/finance.service';
 import { WhatIfService } from '../market/whatif.service';
 import { alignSeries, weeklySample, correlationPairs, portfolioBacktest, round2 } from './tool-math';
+import { chartBreakdown } from '../market/chart';
 import { ToolDefinition } from '../ai-provider/openai-compatible.provider';
 import { toolsForProfile } from './agent-profiles';
 
@@ -194,6 +195,21 @@ export class AiToolsService {
               emergencyReserve: { type: 'number' },
             },
             required: ['bookKind'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'analyze_chart',
+          description:
+            'Análise técnica COMPLETA do gráfico de um ativo: todos os suportes e resistências (com distância %), MM20/50/200 e cruzamento dourado/morte, RSI, MACD (histograma e cruzamento recente), Bollinger, estrutura de topos/fundos e posição vs 52 semanas. Use quando o usuário pedir análise de gráfico, suporte/resistência ou métricas técnicas em profundidade.',
+          parameters: {
+            type: 'object',
+            properties: {
+              symbol: { type: 'string' },
+            },
+            required: ['symbol'],
           },
         },
       },
@@ -531,6 +547,8 @@ export class AiToolsService {
       switch (name) {
         case 'get_cash_position':
           return await this.cashPosition(tenantId);
+        case 'analyze_chart':
+          return await this.analyzeChart(String(args.symbol || ''));
         case 'whatif_investment':
           return await this.whatIfInvestment(args);
         case 'whatif_portfolio':
@@ -1175,6 +1193,60 @@ export class AiToolsService {
       },
       citation: { tool: 'update_cash', source: 'Livros de finanças', asOf },
     };
+  }
+
+  /** Análise técnica completa do gráfico (mesma matemática da página, todos os níveis). */
+  private async analyzeChart(symbol: string): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const clean = symbol.trim().toUpperCase();
+    if (!clean) return { result: { error: 'Informe o ticker.' } };
+    try {
+      const { symbol: resolved, currency, points } = await this.quotes.history(clean, '2y');
+      const closes = points.map((p) => p.close);
+      const breakdown = chartBreakdown(closes);
+      if (!breakdown) {
+        return { result: { error: `Histórico insuficiente para ${resolved}.` } };
+      }
+      // Réguas de contexto para o agente interpretar.
+      const context = {
+        price: breakdown.price,
+        currency,
+        movingAverages: {
+          ma20: breakdown.ma20,
+          ma50: breakdown.ma50,
+          ma200: breakdown.ma200,
+          goldenDeathCross: breakdown.goldenDeath,
+        },
+        rsi14: breakdown.rsi14,
+        macd: breakdown.macd,
+        bollinger: breakdown.bollinger,
+        levels: {
+          supportsAbovePrice: breakdown.supportsAbove.slice(0, 4),
+          supportsBelowPrice: breakdown.supportsBelow.slice(0, 4),
+          resistancesAbovePrice: breakdown.resistancesAbove.slice(0, 4),
+          resistancesBelowPrice: breakdown.resistancesBelow.slice(0, 4),
+          note: 'níveis da janela de 12 meses (mínimos/máximos locais agrupados ±1,5%)',
+        },
+        weeks52: {
+          high: breakdown.high52w,
+          low: breakdown.low52w,
+          fromHighPct: breakdown.fromHigh52wPct,
+          fromLowPct: breakdown.fromLow52wPct,
+        },
+        marketStructure: breakdown.structure,
+        asOf,
+      };
+      return {
+        result: context,
+        citation: {
+          tool: 'analyze_chart',
+          source: `histórico ${resolved} (${currency}) — métricas técnicas`,
+          asOf,
+        },
+      };
+    } catch (error) {
+      return { result: { error: (error as Error).message.slice(0, 160) } };
+    }
   }
 
   /** Caixa disponível para investir (pessoal + empresa) — base para qualquer dica de aporte. */
