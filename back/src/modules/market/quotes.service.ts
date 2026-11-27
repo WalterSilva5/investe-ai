@@ -573,8 +573,7 @@ export class QuotesService {
 
   private async b3Quote(symbol: string): Promise<Quote> {
     const token = process.env.BRAPI_TOKEN;
-    const url = `https://brapi.dev/api/quote/${encodeURIComponent(symbol)}${token ? `?token=${token}` : ''}`;
-    const response = await fetch(url);
+    const url = `https://brapi.dev/api/quote/${encodeURIComponent(symbol)}${token ? `?token=${token}` : ''}`;    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`brapi ${symbol}: HTTP ${response.status}`);
     }
@@ -592,6 +591,52 @@ export class QuotesService {
       source: 'brapi.dev',
       fetchedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Fundamentos do papel (brapi): preço, market cap, P/L, EPS, faixa de 52
+   * semanas e posição dentro dela. B3 apenas — resto do mundo sem cobertura
+   * no plano gratuito.
+   */
+  async fundamentals(rawSymbol: string): Promise<Record<string, unknown> | null> {
+    const symbol = String(rawSymbol || '').trim().toUpperCase();
+    if (!symbol || CRYPTO_IDS[symbol]) return null;
+    const cacheKey = `fund:${symbol}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.at < 15 * 60 * 1000) {
+      return (cached.data as Record<string, unknown> | null) ?? null;
+    }
+    const token = process.env.BRAPI_TOKEN;
+    const url = `https://brapi.dev/api/quote/${encodeURIComponent(symbol)}${token ? `?token=${token}` : ''}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`brapi: HTTP ${response.status}`);
+    const payload = (await response.json()) as {
+      results?: Array<Record<string, unknown>>;
+    };
+    const row = payload.results?.[0];
+    if (!row) return null;
+    const high = Number(row.fiftyTwoWeekHigh) || null;
+    const low = Number(row.fiftyTwoWeekLow) || null;
+    const price = Number(row.regularMarketPrice) || null;
+    const position52w =
+      high != null && low != null && high > low && price != null
+        ? round2(((price - low) / (high - low)) * 100)
+        : null;
+    const data = {
+      symbol: row.symbol as string,
+      name: (row.longName || row.shortName) as string,
+      currency: row.currency || 'BRL',
+      price,
+      marketCapBrl: row.marketCap != null ? round2(Number(row.marketCap) / 1e9) : null, // em bilhões
+      priceEarnings: row.priceEarnings != null ? round2(Number(row.priceEarnings)) : null,
+      earningsPerShare: row.earningsPerShare != null ? round2(Number(row.earningsPerShare)) : null,
+      weeks52: { low, high, positionPct: position52w },
+      dayRange: row.regularMarketDayRange ?? null,
+      volume: row.regularMarketVolume ?? null,
+      note: 'fonte brapi (plano gratuito): fundamentos básicos — P/L, lucro por ação, market cap e posição na faixa de 52 semanas',
+    };
+    this.cache.set(cacheKey, { at: Date.now(), data });
+    return data;
   }
 
   private async cryptoQuote(symbol: string): Promise<Quote> {
@@ -614,4 +659,11 @@ export class QuotesService {
       fetchedAt: new Date().toISOString(),
     };
   }
+
+  /** Cache em memória (fundamentos etc.). */
+  private cache = new Map<string, { at: number; data: unknown }>();
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

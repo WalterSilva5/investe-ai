@@ -133,7 +133,12 @@ Além das ferramentas de carteira, macro e criação de notas, o agente tem (per
 - `whatif_investment` — simulador (passado + cenários de futuro 12m no próprio histórico): "se eu tivesse investido R$ X há N anos em SYMBOL" → valor final, lucro, ROI, anualizada, drawdown, ano a ano e comparativo com o CDI real do período (série diária do BCB). Mesma conta da página **Simulador** (`/app/whatif`).
 - `whatif_portfolio` — simulador de passado DIVERSIFICADO: pernas `{symbol, amount, monthly?}` → resultado por perna + total combinado por data em comum + CDI. Usado pelo chat embutido na página do simulador ("simule R$ 1.000 em PETR4 e R$ 2.000 em IVVB11 há 5 anos").
 - `whatif_strategy` — simulador "SEGUINDO O AGENTE": análises mensais no passado com a MESMA régua do veredito atual (Oportunidade = score ≥ 65 e ganho/risco ≥ 1,2 → investe o caixa; Evitar = score ≤ 35 ou baixa sem relação → zera a posição; Aguardar → mantém). Compara com compra-e-segura e CDI no mesmo fluxo. A régua vive em `market/indicators.ts` (fonte única usada pelo outlook e pelo simulador).
+- **Protocolo de analista profissional** no prompt base: relatório completo (Tese → números → Bull → Bear → Invalidação → Riscos) montado em cadeia com as ferramentas — o teste real encadeou 10 tools (briefing, gráfico, fundamentos, notícias, outlook, caixa, comparação, backtest, position sizing).
 - `analyze_chart` — análise técnica completa do gráfico: TODOS os suportes/resistências da janela de 12 meses (com distância %), MM20/50/200 + cruzamento dourado/morte, RSI (mesma metodologia Wilder do app), MACD (linha, sinal, histograma, cruzamento recente), Bollinger (%B), estrutura de topos/fundos e posição vs 52 semanas. Matemática pura em `market/chart.ts`.
+- `get_fundamentals` — fundamentos do papel (B3 via brapi): market cap, P/L, lucro por ação, faixa e posição em 52 semanas.
+- `get_news` — notícias recentes dos feeds RSS, filtradas por ticker/palavra-chave.
+- `position_size` — position sizing profissional: capital × risco por operação × entrada/stop → quantidade, valor da posição e risco real em dinheiro.
+- `stress_test` — choque percentual (−20 a −40%) sobre a carteira mostrando as posições que mais doem por peso.
 - Anualizada correta com aportes mensais: **IRR** (cada aporte descontado no mês em que entrou) — a fórmula simples inflava o número.
 
 A matemática (alinhamento de séries, Pearson, backtest de pesos, juros compostos do CDI) é pura e testada (`ai/tool-math.ts`, `market/whatif.ts`).

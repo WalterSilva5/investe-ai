@@ -160,6 +160,49 @@ export function irrAnnualPct(
 }
 
 /**
+ * Position sizing profissional: dado o capital, o risco por operação (1-2%),
+ * o preço de entrada e o stop, calcula a quantidade e valida o risco real.
+ */
+export interface PositionSizeResult {
+  quantity: number;
+  positionValue: number;
+  riskAmount: number;
+  actualRiskPct: number;
+  stopDistancePct: number;
+  overshoot: boolean;
+  note: string;
+}
+
+export function positionSize(
+  capital: number,
+  riskPct: number,
+  entry: number,
+  stop: number,
+): PositionSizeResult | null {
+  if (!Number.isFinite(capital) || !Number.isFinite(riskPct) || !Number.isFinite(entry) || !Number.isFinite(stop)) return null;
+  if (capital <= 0 || entry <= 0 || stop <= 0 || stop >= entry) return null;
+  const risk = riskPct > 0 && riskPct <= 10 ? riskPct / 100 : 0.01;
+  const riskAmount = capital * risk;
+  const perShareRisk = entry - stop;
+  const quantity = Math.floor(riskAmount / perShareRisk);
+  if (quantity < 1) return null;
+  const positionValue = quantity * entry;
+  const actualRisk = quantity * perShareRisk;
+  return {
+    quantity,
+    positionValue: round2(positionValue),
+    riskAmount: round2(actualRisk),
+    actualRiskPct: round2((actualRisk / capital) * 100),
+    stopDistancePct: round2((perShareRisk / entry) * 100),
+    overshoot: positionValue > capital,
+    note:
+      positionValue > capital
+        ? 'posição maior que o capital — reduza o risco por operação ou afrouxe o stop'
+        : 'quantidade que faz o stop custar exatamente o risco definido',
+  };
+}
+
+/**
  * Projeção de cenários para o futuro (12 meses) a partir do PRÓPRIO histórico
  * do papel: retornos anuais realizados, volatilidade anual e frequência
  * histórica de retorno positivo. Cenário estatístico, não promessa — o

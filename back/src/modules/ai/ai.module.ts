@@ -4,6 +4,7 @@ import { FixedIncomeModule } from '../fixed-income/fixed-income.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { MemoriesModule } from '../memories/memories.module';
 import { AnalysisModule } from '../analysis/analysis.module';
+import { InsightsModule } from '../insights/insights.module';
 import { MarketModule } from '../market/market.module';
 import { FinanceModule } from '../finance/finance.module';
 import { PortfoliosModule } from '../portfolios/portfolios.module';
@@ -20,7 +21,7 @@ import { PromptTuneService } from './prompt-tune.service';
 import { OpportunitiesModule } from '../opportunities/opportunities.module';
 
 @Module({
-  imports: [AiProviderModule, PortfoliosModule, FinanceModule, FixedIncomeModule, DocumentsModule, MemoriesModule, AnalysisModule, MarketModule, DiscoveryModule, LearningModule, PromptsModule, OpportunitiesModule],
+  imports: [AiProviderModule, PortfoliosModule, FinanceModule, FixedIncomeModule, DocumentsModule, MemoriesModule, AnalysisModule, InsightsModule, MarketModule, DiscoveryModule, LearningModule, PromptsModule, OpportunitiesModule],
   controllers: [AiController, PromptAdminController],
   providers: [AiService, AiToolsService, AiUsageService, PromptEvalService, PromptTuneService],
   exports: [AiService, PromptTuneService],

@@ -214,6 +214,7 @@ export class ShellComponent {
   readonly navGroups = signal<NavGroup[]>([
     {
       items: [
+        { path: '/app/chat', label: 'Chat / análise', icon: 'pi-comments' },
         { path: '/app/overview', label: 'Visão geral', icon: 'pi-home' },
         { path: '/app/opportunities', label: 'Radar de oportunidades', icon: 'pi-compass' },
         { path: '/app/insights', label: 'Insights de IA', icon: 'pi-sparkles' },
@@ -245,7 +246,6 @@ export class ShellComponent {
     {
       title: 'Agente de IA',
       items: [
-        { path: '/app/chat', label: 'Chat / análise', icon: 'pi-comments' },
         { path: '/app/memories', label: 'Memórias', icon: 'pi-database' },
         { path: '/app/prompts', label: 'Prompts do agente', icon: 'pi-comment' },
         { path: '/app/settings', label: 'Provedores de IA', icon: 'pi-sliders-h' },

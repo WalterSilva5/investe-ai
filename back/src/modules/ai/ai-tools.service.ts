@@ -15,6 +15,9 @@ import { FinanceService } from '../finance/finance.service';
 import { WhatIfService } from '../market/whatif.service';
 import { alignSeries, weeklySample, correlationPairs, portfolioBacktest, round2 } from './tool-math';
 import { chartBreakdown } from '../market/chart';
+import { positionSize } from '../market/whatif';
+import { NewsService } from '../insights/news.service';
+import { FxService } from '../market/fx.service';
 import { ToolDefinition } from '../ai-provider/openai-compatible.provider';
 import { toolsForProfile } from './agent-profiles';
 
@@ -45,10 +48,99 @@ export class AiToolsService {
     private readonly promptSim: PromptSimService,
     private readonly finance: FinanceService,
     private readonly whatIf: WhatIfService,
+    private readonly insightsNews: NewsService,
+    private readonly fx: FxService,
   ) {}
 
   definitions(): ToolDefinition[] {
     return [
+      {
+        type: 'function',
+        function: {
+          name: 'get_fundamentals',
+          description:
+            'Fundamentos do papel (B3 via brapi): market cap, P/L, lucro por ação, faixa e posição em 52 semanas, volume. Use junto do analyze_chart para o quadro completo.',
+          parameters: {
+            type: 'object',
+            properties: { symbol: { type: 'string' } },
+            required: ['symbol'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_news',
+          description:
+            'Notícias recentes (RSS: InfoMoney, Exame, Agência Brasil, CoinDesk…), filtradas por palavra-chave ou ticker quando informado. Use para saber o que está saindo sobre um ativo ou tema.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'palavra-chave ou ticker (opcional)' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'position_size',
+          description:
+            'Calculadora de position sizing: dado capital, risco por operação (%, ex.: 1) e entrada/stop, calcula quantidade, valor da posição e risco real. Use SEMPRE que discutir quanto comprar.',
+          parameters: {
+            type: 'object',
+            properties: {
+              capital: { type: 'number' },
+              riskPct: { type: 'number', description: 'risco por operação em % (ex.: 1 = 1%)' },
+              entry: { type: 'number' },
+              stop: { type: 'number' },
+            },
+            required: ['capital', 'riskPct', 'entry', 'stop'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'stress_test',
+          description:
+            'Estresse da carteira: aplica um choque percentual (padrão −30%) sobre as posições e mostra o que mais dói por peso. Use em conversas sobre risco de carteira e alocação defensiva.',
+          parameters: {
+            type: 'object',
+            properties: {
+              shockPct: { type: 'number', description: 'choque negativo em % (padrão 30; aplica queda)' },
+            },
+            required: [],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'market_overview',
+          description:
+            'Panorama do dia em uma chamada: Ibovespa (BOVA11), S&P 500 (IVVB11), BTC, ETH, USD/BRL e ouro — com variação do dia. Use no início de conversas de cenário ("como está o mercado hoje?").',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'save_report',
+          description:
+            'Salva um relatório de análise como documento do usuário (visível em Documentos/notes). Use NO FINAL de relatórios profissionais, com o conteúdo markdown completo do relatório.',
+          parameters: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'ex.: Relatório ITUB4 — 27/11/2026' },
+              content: { type: 'string', description: 'markdown completo do relatório' },
+              tags: { type: 'string', description: 'ex.: relatorio,ITUB4' },
+            },
+            required: ['title', 'content'],
+          },
+        },
+      },
       {
         type: 'function',
         function: {
@@ -547,6 +639,23 @@ export class AiToolsService {
       switch (name) {
         case 'get_cash_position':
           return await this.cashPosition(tenantId);
+        case 'get_fundamentals':
+          return await this.fundamentals(String(args.symbol || ''));
+        case 'get_news':
+          return await this.news(String(args.query || ''));
+        case 'market_overview':
+          return await this.marketOverview();
+        case 'save_report':
+          return await this.saveReport(
+            tenantId,
+            String(args.title || ''),
+            String(args.content || ''),
+            typeof args.tags === 'string' ? args.tags : undefined,
+          );
+        case 'position_size':
+          return await this.positionSize(args);
+        case 'stress_test':
+          return await this.stressTest(tenantId, Number(args.shockPct) || 30);
         case 'analyze_chart':
           return await this.analyzeChart(String(args.symbol || ''));
         case 'whatif_investment':
@@ -1246,6 +1355,187 @@ export class AiToolsService {
       };
     } catch (error) {
       return { result: { error: (error as Error).message.slice(0, 160) } };
+    }
+  }
+
+  /** Panorama do dia: índices, BTC, ETH, câmbio e ouro em uma chamada. */
+  private async marketOverview(): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const symbols = ['BOVA11', 'IVVB11', 'BTC', 'ETH'];
+    const rows = await Promise.all(
+      symbols.map(async (symbol) => {
+        try {
+          const indicators = await this.quotes.indicators(symbol, '1mo');
+          return {
+            symbol,
+            price: indicators.current,
+            currency: indicators.currency,
+            day1Pct: indicators.changed.d1,
+            month1Pct: indicators.changed.m1,
+            year1Pct: indicators.changed.y1,
+          };
+        } catch (error) {
+          return { symbol, error: (error as Error).message.slice(0, 80) };
+        }
+      }),
+    );
+    let fx: unknown = null;
+    try {
+      fx = await this.fx.overview();
+    } catch {
+      fx = null;
+    }
+    return {
+      result: {
+        indices: rows.filter((row) => !('error' in row)),
+        unavailable: rows.filter((row) => 'error' in row).map((row) => row.symbol),
+        fx,
+        note: 'cotações de fechamento/intradiárias do provedor público — cite a moeda de cada linha',
+        asOf,
+      },
+      citation: { tool: 'market_overview', source: 'brapi/CoinGecko/AwesomeAPI', asOf },
+    };
+  }
+
+  /** Salva relatório como documento do usuário. */
+  private async saveReport(
+    tenantId: string,
+    title: string,
+    content: string,
+    tags?: string,
+  ): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    if (!title.trim() || !content.trim()) {
+      return { result: { error: 'Informe título e conteúdo do relatório.' } };
+    }
+    const doc = await this.documents.create(tenantId, {
+      title: `📄 ${title.trim().slice(0, 130)}`,
+      body: content.trim().slice(0, 12000),
+      tags: tags?.trim() || 'relatorio',
+    });
+    return {
+      result: {
+        saved: true,
+        id: doc.id,
+        title: doc.title,
+        hint: 'Documento salvo — visível na página Documentos.',
+        asOf,
+      },
+      citation: { tool: 'save_report', source: 'Documentos do usuário', asOf },
+    };
+  }
+
+  /** Fundamentos do papel (B3). */
+  private async fundamentals(symbol: string): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    try {
+      const data = await this.quotes.fundamentals(symbol);
+      if (!data) {
+        return { result: { error: 'Fundamentos indisponíveis para este ativo (B3 apenas).' } };
+      }
+      return {
+        result: data,
+        citation: { tool: 'get_fundamentals', source: 'brapi.dev', asOf },
+      };
+    } catch (error) {
+      return { result: { error: (error as Error).message.slice(0, 140) } };
+    }
+  }
+
+  /** Notícias recentes (RSS), filtradas por palavra-chave quando informada. */
+  private async news(query: string): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    try {
+      const all = await this.insightsNews.headlines(30);
+      const terms = query.trim().toUpperCase().split(/[\s,]+/).filter(Boolean);
+      const filtered = terms.length
+        ? all.filter((item) => {
+            const text = `${item.title} ${item.source}`.toUpperCase();
+            return terms.some((term) => text.includes(term));
+          })
+        : all;
+      return {
+        result: {
+          query: query || null,
+          total: filtered.length,
+          items: filtered.slice(0, 8),
+          note: 'manchetes dos feeds RSS — leia criticamente: título não é fato',
+          asOf,
+        },
+        citation: { tool: 'get_news', source: 'feeds RSS (InfoMoney, Exame, ABr, CoinDesk)', asOf },
+      };
+    } catch (error) {
+      return { result: { error: `Notícias indisponíveis agora: ${(error as Error).message.slice(0, 100)}` } };
+    }
+  }
+
+  /** Position sizing: quantidade que faz o stop custar o risco definido. */
+  private positionSize(args: Record<string, unknown>): ToolExecution {
+    const asOf = new Date().toISOString();
+    const result = positionSize(
+      Number(args.capital),
+      Number(args.riskPct),
+      Number(args.entry),
+      Number(args.stop),
+    );
+    if (!result) {
+      return {
+        result: {
+          error: 'Parâmetros inválidos: capital > 0, risco 0–10%, e stop precisa estar ABAIXO da entrada.',
+        },
+      };
+    }
+    return {
+      result,
+      citation: { tool: 'position_size', source: 'cálculo determinístico', asOf },
+    };
+  }
+
+  /** Choque de mercado na carteira: o que mais dói por peso. */
+  private async stressTest(tenantId: string, shockPct: number): Promise<ToolExecution> {
+    const asOf = new Date().toISOString();
+    const shock = Math.abs(shockPct);
+    if (!Number.isFinite(shock) || shock <= 0 || shock > 90) {
+      return { result: { error: 'shockPct deve ficar entre 1 e 90.' } };
+    }
+    try {
+      const portfolio = await this.portfolios.getDefaultPortfolio(tenantId);
+      if (!portfolio) return { result: { error: 'Nenhuma carteira cadastrada.' } };
+      const positions = (await this.portfolios.positions(tenantId, portfolio.id)) as Array<{
+        symbol: string;
+        name?: string;
+        currentValue: number;
+      }>;
+      if (!positions.length) return { result: { error: 'Carteira sem posições.' } };
+      const total = positions.reduce((acc, p) => acc + p.currentValue, 0);
+      if (total <= 0) return { result: { error: 'Carteira sem valor para estressar.' } };
+      const rows = positions
+        .map((p) => {
+          const weightPct = round2((p.currentValue / total) * 100);
+          return {
+            symbol: p.symbol,
+            weightPct,
+            currentValue: round2(p.currentValue),
+            afterShockValue: round2(p.currentValue * (1 - shock / 100)),
+            loss: round2(p.currentValue * (shock / 100)),
+          };
+        })
+        .sort((a, b) => b.loss - a.loss);
+      return {
+        result: {
+          shockPct: shock,
+          portfolioValue: round2(total),
+          afterShockValue: round2(total * (1 - shock / 100)),
+          totalLoss: round2(total * (shock / 100)),
+          mostImpacted: rows.slice(0, 5),
+          note:
+            'Choque uniforme sobre o valor de mercado. Na prática quedas não são uniformes — ativos de risco caem mais; use como régua de dor, não como previsão.',
+          asOf,
+        },
+        citation: { tool: 'stress_test', source: 'posições da carteira', asOf },
+      };
+    } catch (error) {
+      return { result: { error: (error as Error).message.slice(0, 140) } };
     }
   }
 

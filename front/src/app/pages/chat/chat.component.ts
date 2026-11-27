@@ -115,16 +115,27 @@ interface AgentTool {
 
       <div class="chat-box" #chatBox (scroll)="onChatScroll()">
         @if (!messages().length) {
-          <p class="muted small">
-            Exemplos: “Qual a minha alocação?”, “Quanto tenho investido?”, “Compare CDB 100% CDI com LCI 90%”,
-            “Como está a Selic e o IPCA?”.
-          </p>
+          <div class="chat-welcome">
+            <div class="welcome-icon">🤖</div>
+            <p>Seu analista de IA. Peça um relatório profissional, compare ativos, simule cenários ou estresse a carteira:</p>
+            <div class="chips welcome-chips">
+              @for (suggestion of suggestions; track suggestion.label) {
+                <button class="chip" (click)="askSuggestion(suggestion.text)">{{ suggestion.label }}</button>
+              }
+            </div>
+          </div>
         }
         @for (message of messages(); track $index) {
           <div class="msg" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
-            <div class="who">{{ message.role === 'user' ? 'Você' : 'Agente' }}</div>
+            <div class="who">{{ message.role === 'user' ? '🧑 Você' : '🤖 Agente' }}</div>
             @if (message.role === 'assistant') {
               <div class="md" [innerHTML]="message.content | markdown"></div>
+              <button
+                class="copy-btn"
+                type="button"
+                (click)="copyMessage(message.content, $index)"
+                title="Copiar resposta"
+              >{{ copied() === $index ? '✓ copiado' : '⧉ copiar' }}</button>
             } @else {
               {{ message.content }}
             }
@@ -136,7 +147,7 @@ interface AgentTool {
                 <div class="think-list">
                   @for (step of message.steps; track $index) {
                     <div class="think-item">
-                      <span class="badge {{ step.status === 'ok' ? 'ok' : 'off' }}">{{ step.tool }}</span>
+                      <span class="badge {{ step.status === 'ok' ? 'ok' : 'off' }}">{{ toolIcon(step.tool) }} {{ step.tool }}</span>
                       <span class="muted small">{{ step.durationMs }}ms</span>
                       @if (step.input && hasInput(step.input)) {
                         <code class="small muted">{{ inputPreview(step.input) }}</code>
@@ -160,7 +171,10 @@ interface AgentTool {
           </div>
         }
         @if (loading()) {
-          <div class="msg assistant"><div class="who">Agente</div>Analisando…</div>
+          <div class="msg assistant">
+            <div class="who">🤖 Agente</div>
+            <div class="typing"><span></span><span></span><span></span></div>
+          </div>
         }
       </div>
 
@@ -457,8 +471,75 @@ export class ChatComponent {
     this.loadConversations();
   }
 
-  private failChat(err: any) {
-    const status = err?.status;
+  /** Sugestões de partida (clique = envia). */
+  readonly suggestions = [
+    { label: '📊 Relatório profissional de um ativo', text: 'Faça o relatório profissional completo do ITUB4: tese, números, bull, bear, invalidação, riscos e quanto comprar com risco de 1% do meu capital. Salve com save_report.' },
+    { label: '⚖️ Compare dois ativos', text: 'Compare PETR4 e VALE3 na mesma régua e diga qual o cenário mais favorável.' },
+    { label: '🔮 Simule cenários', text: 'Se eu tivesse investido R$ 1.000 no ITUB4 há 5 anos, quanto teria? E quais os cenários para os próximos 12 meses?' },
+    { label: '🧨 Estresse da carteira', text: 'Estresse minha carteira com uma queda de 30%: o que mais dói?' },
+    { label: '🌐 Panorama do dia', text: 'Panorama do mercado hoje: índices, cripto, câmbio e ouro.' },
+    { label: '🎯 Quanto posso comprar?', text: 'Quanto tenho de caixa disponível para investir e quanto posso comprar de PETR4 com risco de 1%?' },
+  ];
+
+  askSuggestion(text: string) {
+    this.text = text;
+    this.send();
+  }
+
+  readonly copied = signal<number | null>(null);
+  copyMessage(content: string, index: number) {
+    navigator.clipboard?.writeText(content).then(
+      () => {
+        this.copied.set(index);
+        setTimeout(() => this.copied.set(null), 2000);
+      },
+      () => undefined,
+    );
+  }
+
+  /** Ícone por ferramenta (Raciocínio). */
+  toolIcon(tool: string): string {
+    const map: Record<string, string> = {
+      get_briefing: '🧭',
+      get_portfolio_summary: '💼',
+      get_positions: '📋',
+      get_allocation: '🥧',
+      get_macro: '🏛️',
+      get_cash_position: '💰',
+      analyze_chart: '📊',
+      analyze_theme: '🔎',
+      get_stock_outlook: '🔭',
+      get_fundamentals: '🏢',
+      get_news: '📰',
+      compare_assets: '⚖️',
+      correlation: '🔗',
+      portfolio_backtest: '🧮',
+      whatif_investment: '🔮',
+      whatif_portfolio: '🧺',
+      whatif_strategy: '🤖',
+      position_size: '🎯',
+      stress_test: '🧨',
+      market_overview: '🌐',
+      simulate_fixed_income: '🏦',
+      project_runway: '⏳',
+      project_income: '📈',
+      check_rebalance: '🧩',
+      track_symbol: '📌',
+      create_note: '📝',
+      create_note_report: '📄',
+      save_report: '📄',
+      search_documents: '🗂️',
+      remember: '🧠',
+      search_memory: '🧠',
+      web_search: '🌍',
+      fetch_page: '🌐',
+      verify_tools: '🛠️',
+      alert: '🔔',
+    };
+    return map[tool] || '🔧';
+  }
+
+  private failChat(err: any) {    const status = err?.status;
     const message =
       err?.error?.message ||
       (status === 429
