@@ -427,6 +427,13 @@ a:hover { text-decoration: underline; }
 .insights-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .insights-head h2 { margin: 0 0 4px; }
 .insights-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+
+/* Simulação anexada às dicas de ação */
+.sim-note {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45;
+  background: #f2f7ff; border: 1px solid #d8e6ff;
+}
+.app-dark .sim-note { background: #16233c; border-color: #24406e; }
 .insights-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {

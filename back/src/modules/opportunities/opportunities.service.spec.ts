@@ -35,6 +35,8 @@ describe('OpportunitiesService', () => {
       {} as never,
       { promptStats: jest.fn().mockResolvedValue(null) } as never,
       { notify: jest.fn().mockResolvedValue({}) } as never,
+      // whatIf: simulações falham silenciosamente (dicas voltam sem bloco de simulação)
+      { strategy: jest.fn().mockRejectedValue(new Error('no network')) } as never,
     );
   });
 

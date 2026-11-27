@@ -40,6 +40,7 @@ Ajudar o investidor a **entender narrativas e ciclos de mercado** — tech (IA, 
 
 ## Radar contrário (quedas com sinal de virada)
 
+Cada item do radar contrário vem com o bloco **"📊 Seguindo o agente (24 meses)"**: backtest mensal do papel com a mesma régua do veredito (`indicators.agentSignal`), comparando agente × compra-e-segura × CDI no mesmo fluxo de caixa (cache de 12h; ver `opportunities.service.simulateFor`). Dicas de ação (`action-tips`) também recebem o bloco quando têm ticker.
 - Varre o universo da descoberta + posições da carteira e calcula uma **nota de reversão (0–100)**: RSI em sobrevenda (+30), proximidade do suporte (+20), ganho/risco (+20), repique no dia (+10), queda de 10%+ em 3 meses (+10), mês melhor que o trimestre (+8) e recuperação da MM20 (+8).
 - Papel já em tendência de alta forte ou esticado (RSI > 60) **não entra** — o foco é o que caiu, não o que já subiu.
 - Vereditos: `Reversão forte` (≥60), `Reversão em formação` (40–59), `Aguardar` (25–39); abaixo disso não aparece.

@@ -59,6 +59,22 @@ interface ActionTip {
   trigger?: string;
   invalidation?: string;
   highlight?: boolean;
+  simulation?: TipSimulation | null;
+}
+
+/** Bloco "seguindo o agente" anexado pelo back (backtest da régua mensal). */
+interface TipSimulation {
+  months: number;
+  invested: number;
+  agentFinalValue: number;
+  agentRoiPct: number;
+  agentIrrAnnualPct: number | null;
+  buyHoldFinalValue: number;
+  buyHoldRoiPct: number;
+  cdiFinalValue: number | null;
+  anchors: number;
+  inMarketAnchors: number;
+  verdict: string;
 }
 
 interface ActionDigest {
@@ -78,6 +94,7 @@ interface ContrarianItem {
   rsi14: number | null;
   distSupportPct: number | null;
   ratio: number | null;
+  simulation?: TipSimulation | null;
 }
 
 interface BriefContent {
@@ -121,9 +138,11 @@ interface Brief {
     </p>
 
     <div class="alert ok" style="margin-bottom:18px">
-      <strong>Como usar com ética:</strong> o objetivo é você se proteger e agir com critério —
-      reconhecer hype, manipulação e risco de comprar no topo. <em>Não</em> é para explorar a
-      ignorância de outros investidores.
+      <strong>Como usar:</strong> o radar lê o comportamento da manada — e a manada erra em bando.
+      Serve para os dois lados do mesmo movimento: <strong>se proteger</strong> do hype (não ser o
+      tolo que compra o topo) e <strong>aproveitar os erros dos outros</strong> — comprar barato no
+      pânico alheio, vender na euforia, ficar de fora quando só sobrou tolo na mesa. Contra
+      fraude/manipulação a fronteira é legal, não ética: isso o radar marca como risco, não esconde.
     </div>
 
     <div class="legend" style="margin-bottom:16px">
@@ -217,6 +236,21 @@ interface Brief {
                 />
               </td>
             </tr>
+            @if (row.simulation; as sim) {
+              <tr style="border:0">
+                <td colspan="9" style="padding-top:0">
+                  <div class="sim-note">
+                    <strong>📊 Seguindo o agente ({{ sim.months }} meses):</strong>
+                    R$ {{ sim.invested }} → R$ {{ sim.agentFinalValue }}
+                    ({{ sim.agentRoiPct >= 0 ? '+' : '' }}{{ sim.agentRoiPct }}% ·
+                    {{ sim.agentIrrAnnualPct }}% a.a. IRR)
+                    vs compra e segura R$ {{ sim.buyHoldFinalValue }} ({{ sim.buyHoldRoiPct }}%)
+                    @if (sim.cdiFinalValue) { · CDI: R$ {{ sim.cdiFinalValue }} }
+                    — {{ sim.verdict }}
+                  </div>
+                </td>
+              </tr>
+            }
           </ng-template>
         </p-table>
       } @else if (!contrarianLoading()) {
@@ -268,6 +302,17 @@ interface Brief {
                   </p-accordion-header>
                   <p-accordion-content>
                     <div class="name">{{ tip.action }}</div>
+                    @if (tip.simulation; as sim) {
+                      <div class="sim-note">
+                        <strong>📊 Seguindo o agente ({{ sim.months }} meses):</strong>
+                        R$ {{ sim.invested }} → R$ {{ sim.agentFinalValue }}
+                        ({{ sim.agentRoiPct >= 0 ? '+' : '' }}{{ sim.agentRoiPct }}% ·
+                        {{ sim.agentIrrAnnualPct }}% a.a. IRR)
+                        vs compra e segura R$ {{ sim.buyHoldFinalValue }} ({{ sim.buyHoldRoiPct }}%)
+                        @if (sim.cdiFinalValue) { · CDI: R$ {{ sim.cdiFinalValue }} }
+                        — {{ sim.verdict }} ({{ sim.inMarketAnchors }}/{{ sim.anchors }} análises no mercado)
+                      </div>
+                    }
                     <div class="meta" style="margin-top:6px">
                       @if (tip.why) { <div><strong>Por quê:</strong> {{ tip.why }}</div> }
                       @if (tip.trigger) { <div><strong>Confirma se:</strong> {{ tip.trigger }}</div> }

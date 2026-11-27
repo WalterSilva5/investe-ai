@@ -39,7 +39,7 @@ export class OpportunitiesController {
 
   @Get('action-tips')
   actionTips(@TenantId() tenantId: string) {
-    return this.opportunities.latestActions(tenantId);
+    return this.opportunities.latestActionsEnriched(tenantId);
   }
 
   @Get('action-tips/history')

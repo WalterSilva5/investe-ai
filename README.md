@@ -39,7 +39,7 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 - **Memória do agente** (`remember`/`search_memory`) e **notas** (`search_documents`).
 - **Insights periódicos**: dicas geradas por IA a partir de **notícias (RSS)** + **indicadores (Selic/IPCA/CDI)** + **carteira**, com painel dedicado, **filtro por categoria**, **badge de não lidos** e **digest por e-mail**.
 - **Radar de oportunidades**: analisa narrativas (IA, cripto, metaverso, NFTs, chips, energia…) com **atenção, hype risk, estágio do ciclo, riscos, sinais de confirmação/invalidação e regras de saída** — sem recomendar compra/venda.
-- **Radar contrário**: varre o universo + carteira atrás do que **caiu e dá sinal de virada** (RSI em sobrevenda, suporte próximo, ganho/risco e repique), com nota de reversão.
+- **Radar contrário**: varre o universo + carteira atrás do que **caiu e dá sinal de virada** (RSI em sobrevenda, suporte próximo, ganho/risco e repique), com nota de reversão — e **simulação "seguindo o agente"** em cada item (backtest mensal de 24 meses com a mesma régua: agente × compra-e-segura × CDI, cache 12h).
 - **Ciclo do halving (BTC/ETH)**: dias até o próximo halving (estimado), fase do ciclo e referência histórica dos ciclos anteriores (dias do halving ao topo, drawdown seguinte).
 - **Oportunidades de negócio**: usa seu perfil (skills, experiência, formação) para gerar caminhos de negócio com **fit, primeiros passos e validação barata**.
 - **Chat global**: widget flutuante em qualquer tela (com atalho para a tela cheia), markdown, parar e raciocínio visível; o agente consulta a leitura técnica de qualquer ticker e **cadastra papéis na watchlist de Descobertas**.

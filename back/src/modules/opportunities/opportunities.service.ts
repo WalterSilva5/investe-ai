@@ -4,6 +4,7 @@ import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
 import { MacroService } from '../market/macro.service';
 import { QuotesService } from '../market/quotes.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
+import { WhatIfService } from '../market/whatif.service';
 import { LearningService } from '../learning/learning.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NewsService } from '../insights/news.service';
@@ -21,7 +22,8 @@ const BASE_PROMPT = `Você é um analista de narrativas e ciclos de mercado. Sua
 
 Regras obrigatórias (valem para todos os modos):
 - NÃO recomende compra/venda, NÃO dê preço-alvo e NÃO preveja preço.
-- NÃO sugira manipulação, fraude, notícia falsa, pump-and-dump, insider trading ou explorar pessoas específicas. O foco é o investidor agir com ética e se proteger.
+- NÃO sugira crime: manipulação, fraude, notícia falsa, pump-and-dump, insider trading ou golpe em pessoa específica (isso é ilegal, não "antiético").
+- SIM aponte os erros da manada sem freio: pânico de vendedor fraco, euforia de comprador tarde, liquidação por margem, FOMO no topo — e como se posicionar DO LADO contrário para lucrar com isso. Tirar dinheiro dos erros alheios tomando o lado certo da negociação é o ofício do contrarionista: a mesma leitura que te protege do hype te mostra onde a manada deixou preço errado.
 - Separe FATO de NARRATIVA. Seja cético com promessas.
 - Classifique o estágio no ciclo de hype: EMERGENTE, HYPE, DESILUSAO, MATURACAO, PLATEAU, DECLINIO.
 - Aponte sinais de confirmação, sinais de invalidação e regras de saída (disciplina), não "quando vender".
@@ -111,7 +113,75 @@ export class OpportunitiesService {
     private readonly quotes: QuotesService,
     private readonly learning: LearningService,
     private readonly notifications: NotificationsService,
+    private readonly whatIf: WhatIfService,
   ) {}
+
+  /** Cache de simulações por símbolo (12h) — evita refazer histórico a cada leitura. */
+  private simCache = new Map<string, { at: number; data: Record<string, unknown> | null }>();
+  private static readonly SIM_TTL_MS = 12 * 3600 * 1000;
+
+  /**
+   * Roda a simulação de estratégia (seguindo o agente, análise mensal) no
+   * papel da oportunidade e devolve um bloco compacto para anexar à dica.
+   */
+  private async simulateFor(symbol: string, months = 24): Promise<Record<string, unknown> | null> {
+    const key = `${symbol}:${months}`;
+    const cached = this.simCache.get(key);
+    if (cached && Date.now() - cached.at < OpportunitiesService.SIM_TTL_MS) return cached.data;
+    try {
+      const run = (await this.whatIf.strategy(symbol, 1000, months, 0)) as Record<string, unknown>;
+      const agent = run.agent as Record<string, number | null>;
+      const buyHold = run.buyHold as Record<string, number>;
+      const cdi = run.cdi as Record<string, number> | null;
+      const data = {
+        months: run.months,
+        invested: 1000,
+        agentFinalValue: agent.finalValue,
+        agentRoiPct: agent.roiPct,
+        agentIrrAnnualPct: agent.irrAnnualPct,
+        buyHoldFinalValue: buyHold.finalValue,
+        buyHoldRoiPct: buyHold.roiPct,
+        cdiFinalValue: cdi?.finalValue ?? null,
+        anchors: agent.anchors,
+        inMarketAnchors: agent.inMarketAnchors,
+        verdict:
+          (agent.roiPct ?? 0) > (buyHold.roiPct ?? 0)
+            ? 'seguir o agente teria batido compra-e-segura'
+            : 'compra-e-segura teria batido o agente',
+      };
+      this.simCache.set(key, { at: Date.now(), data });
+      return data;
+    } catch (error) {
+      this.logger.warn(`Simulação para ${symbol} falhou: ${(error as Error).message.slice(0, 80)}`);
+      this.simCache.set(key, { at: Date.now(), data: null });
+      return null;
+    }
+  }
+
+  /** Anexa a simulação às dicas que têm ticker (em paralelo, limitado). */
+  private async enrichTipsWithSimulations(
+    actions: Array<Record<string, unknown>>,
+  ): Promise<Array<Record<string, unknown>>> {
+    const tickers = [...new Set(
+      actions
+        .filter((tip) => tip.ticker && tip.verdict)
+        .map((tip) => String(tip.ticker).toUpperCase()),
+    )];
+    if (!tickers.length) return actions;
+    const sims = new Map<string, Record<string, unknown> | null>();
+    const CONCURRENCY = 3;
+    for (let i = 0; i < tickers.length; i += CONCURRENCY) {
+      await Promise.all(
+        tickers.slice(i, i + CONCURRENCY).map(async (ticker) => {
+          sims.set(ticker, await this.simulateFor(ticker));
+        }),
+      );
+    }
+    return actions.map((tip) => {
+      const sim = tip.ticker ? sims.get(String(tip.ticker).toUpperCase()) : undefined;
+      return sim ? { ...tip, simulation: sim } : tip;
+    });
+  }
 
   themes() {
     return OPPORTUNITY_THEMES.map((theme) => ({
@@ -234,6 +304,23 @@ export class OpportunitiesService {
     });
   }
 
+  /** Dicas atuais COM simulações (enriquece sob demanda e salva de volta quando faltava). */
+  async latestActionsEnriched(tenantId: string) {
+    const digest = await this.latestActions(tenantId);
+    if (!digest) return digest;
+    const actions = digest.actions as unknown as Array<Record<string, unknown>>;
+    if (!Array.isArray(actions) || !actions.length) return digest;
+    const needsSim = actions.some((tip) => tip.ticker && !tip.simulation);
+    if (!needsSim) return digest;
+    const enriched = await this.enrichTipsWithSimulations(actions);
+    const updated = { ...digest, actions: enriched as never };
+    // Persiste o enriquecimento para não refazer a cada leitura.
+    await this.prisma.actionDigest
+      .update({ where: { id: digest.id }, data: { actions: enriched as never } })
+      .catch(() => undefined);
+    return updated;
+  }
+
   /**
    * Radar contrário: papéis que caíram e mostram sinal de virada
    * (sobrevenda, suporte próximo, ganho/risco e repique). Varre o mesmo
@@ -298,8 +385,23 @@ export class OpportunitiesService {
       };
     });
 
+    // Simulação "seguindo o agente" em cada item do radar contrário.
+    const simResults = new Map<string, Record<string, unknown> | null>();
+    const contrarianSymbols = items.map((item) => item.symbol).slice(0, 8);
+    for (let i = 0; i < contrarianSymbols.length; i += 3) {
+      await Promise.all(
+        contrarianSymbols.slice(i, i + 3).map(async (symbol) => {
+          simResults.set(symbol, await this.simulateFor(symbol));
+        }),
+      );
+    }
+    const itemsWithSim = items.map((item) => {
+      const sim = simResults.get(item.symbol);
+      return sim ? { ...item, simulation: sim } : item;
+    });
+
     // Sinal quente: reversão forte com nota alta vira notificação (dedupe por dia).
-    for (const item of items
+    for (const item of itemsWithSim
       .filter((item) => item.verdict === 'Reversão forte' && item.score >= 70)
       .slice(0, 3)) {
       await this.notifications
@@ -313,7 +415,7 @@ export class OpportunitiesService {
         .catch(() => undefined);
     }
 
-    return { scanned: inputs.length, failures, items };
+    return { scanned: inputs.length, failures, items: itemsWithSim };
   }
 
   /** Histórico por dia: digest de cada geração (título, data e ações). */
@@ -442,7 +544,9 @@ export class OpportunitiesService {
         tenantId,
         title: String(parsed.title || 'Dicas de ação').slice(0, 180),
         summary: String(parsed.summary || '').slice(0, 1500),
-        actions: actions.slice(0, 6).map((a, i) => ({ ...a, highlight: i === 0 })) as never,
+        actions: (await this.enrichTipsWithSimulations(
+          actions.slice(0, 6).map((a, i) => ({ ...a, highlight: i === 0 })),
+        )) as never,
         providerId: resolved.providerId,
         model: resolved.model,
       },
