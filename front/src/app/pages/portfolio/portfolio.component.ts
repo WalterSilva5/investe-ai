@@ -9,6 +9,7 @@ import { SelectModule } from 'primeng/select';
 import { ToolbarModule } from 'primeng/toolbar';
 import { ApiService } from '../../core/api.service';
 import { AllocationDonutComponent } from '../../shared/charts/allocation-donut.component';
+import { PriceChartComponent } from '../../shared/charts/price-chart.component';
 
 interface Portfolio {
   id: string;
@@ -67,6 +68,37 @@ interface Transaction {
   asset: { symbol: string; name: string };
 }
 
+interface IncomeItem {
+  assetId: string;
+  symbol: string;
+  name: string;
+  totalReceived: number;
+  last12m: number;
+  dyPct: number;
+  payments: number;
+  lastDate: string | null;
+}
+
+interface IncomeSummary {
+  totalReceived: number;
+  totalLast12m: number;
+  items: IncomeItem[];
+}
+
+interface PricePoint {
+  date: string;
+  close: number;
+}
+
+interface LevelsResponse {
+  points: PricePoint[];
+  supports: number[];
+  resistances: number[];
+  ma20: number | null;
+  ma50: number | null;
+  currency: string;
+}
+
 @Component({
   selector: 'app-portfolio',
   imports: [
@@ -79,6 +111,7 @@ interface Transaction {
     SelectModule,
     ToolbarModule,
     AllocationDonutComponent,
+    PriceChartComponent,
   ],
   template: `
     <h1 class="page-title">Carteira</h1>
@@ -225,6 +258,85 @@ interface Transaction {
       </div>
 
       <section class="section">
+        <h2>Cotação e proventos</h2>
+        <div class="grid-2">
+          <p-card header="Histórico de cotação">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <p-select
+                [options]="symbolOptions()"
+                [(ngModel)]="selAsset"
+                (onChange)="loadLevels()"
+                placeholder="Ativo"
+                appendTo="body"
+              />
+              <p-select
+                [options]="periodOptions"
+                [(ngModel)]="period"
+                (onChange)="loadLevels()"
+                appendTo="body"
+              />
+              <input
+                class="input"
+                style="max-width:130px"
+                [(ngModel)]="customSymbol"
+                placeholder="Outro ticker"
+                (keyup.enter)="viewCustom()"
+              />
+              <p-button label="Ver" severity="secondary" [outlined]="true" size="small" (onClick)="viewCustom()" />
+            </div>
+            @if (historyLoading()) {
+              <p class="muted small">Carregando histórico…</p>
+            } @else if (historyError()) {
+              <div class="alert error">{{ historyError() }}</div>
+            } @else if (historyValues().length) {
+              <app-price-chart
+                [labels]="historyLabels()"
+                [values]="historyValues()"
+                [supports]="supports()"
+                [resistances]="resistances()"
+                [title]="selAsset + ' (' + priceCurrency() + ')'"
+              />
+              @if (historyStats(); as st) {
+                <div class="stat-hint">
+                  Mín {{ moneyC(st.min) }} · Máx {{ moneyC(st.max) }} · MM20 {{ st.ma20 ? moneyC(st.ma20) : '—' }} · MM50 {{ st.ma50 ? moneyC(st.ma50) : '—' }} ·
+                  <p-tag [value]="(st.changePct >= 0 ? '+' : '') + st.changePct.toFixed(2) + '% no período'" [severity]="st.changePct >= 0 ? 'success' : 'danger'" />
+                </div>
+                <div class="stat-hint">
+                  Suportes: {{ supportLabels() || '—' }} ·
+                  Resistências: {{ resistanceLabels() || '—' }}
+                </div>
+              }
+            }
+          </p-card>
+
+          <p-card header="Proventos recebidos">
+            @if (income(); as inc) {
+              <div class="stat-value">{{ money(inc.totalReceived) }}</div>
+              <div class="stat-hint">total · {{ money(inc.totalLast12m) }} nos últimos 12 meses</div>
+              <p-table [value]="inc.items" stripedRows [scrollable]="true" scrollHeight="280px" styleClass="mt-2">
+                <ng-template #header>
+                  <tr><th>Ativo</th><th>12 meses</th><th>DY recebido</th><th>Total</th></tr>
+                </ng-template>
+                <ng-template #body let-item>
+                  <tr>
+                    <td><strong>{{ item.symbol }}</strong></td>
+                    <td>{{ money(item.last12m) }}</td>
+                    <td><p-tag [value]="item.dyPct.toFixed(2) + '%'" severity="success" /></td>
+                    <td>{{ money(item.totalReceived) }}</td>
+                  </tr>
+                </ng-template>
+                <ng-template #emptymessage>
+                  <tr><td colspan="4" class="muted">Nenhum dividendo/juros registrado. Registre transações DIVIDENDO.</td></tr>
+                </ng-template>
+              </p-table>
+            } @else {
+              <p class="muted small">Sem dados de proventos.</p>
+            }
+          </p-card>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Posições</h2>
         <p-table [value]="positions()" stripedRows [scrollable]="true" scrollHeight="420px">
           <ng-template #header>
@@ -292,9 +404,30 @@ export class PortfolioComponent {
   readonly assets = signal<Asset[]>([]);
   readonly message = signal<string | null>(null);
   readonly ok = signal(false);
+  readonly income = signal<IncomeSummary | null>(null);
+  readonly historyLabels = signal<string[]>([]);
+  readonly historyValues = signal<number[]>([]);
+  readonly supports = signal<number[]>([]);
+  readonly resistances = signal<number[]>([]);
+  readonly ma20 = signal<number | null>(null);
+  readonly ma50 = signal<number | null>(null);
+  readonly priceCurrency = signal('BRL');
+  readonly historyLoading = signal(false);
+  readonly historyError = signal<string | null>(null);
+
+  readonly periodOptions = [
+    { label: '30 dias', value: '1mo' },
+    { label: '3 meses', value: '3mo' },
+    { label: '6 meses', value: '6mo' },
+    { label: '1 ano', value: '1y' },
+    { label: '5 anos', value: '5y' },
+  ];
 
   selectedPortfolioId = '';
   newPortfolioName = '';
+  selAsset = '';
+  customSymbol = '';
+  period = '1y';
   tx = { assetId: '', type: 'BUY', quantity: 1, price: 0, date: new Date().toISOString().slice(0, 10) };
   assetForm = { symbol: '', name: '', type: 'STOCK' };
 
@@ -323,6 +456,18 @@ export class PortfolioComponent {
 
   readonly assetOptions = computed(() =>
     this.assets().map((a) => ({ label: `${a.symbol} - ${a.name}`, value: a.id })),
+  );
+
+  readonly symbolOptions = computed(() =>
+    this.positions().map((p) => ({ label: p.symbol, value: p.symbol })),
+  );
+
+  readonly supportLabels = computed(() =>
+    this.supports().map((v) => this.moneyC(v)).join(' · '),
+  );
+
+  readonly resistanceLabels = computed(() =>
+    this.resistances().map((v) => this.moneyC(v)).join(' · '),
   );
 
   constructor() {
@@ -357,11 +502,76 @@ export class PortfolioComponent {
       error: () => this.summary.set(null),
     });
     this.api.get<Position[]>(`/portfolios/${id}/positions`).subscribe({
-      next: (positions) => this.positions.set(positions),
+      next: (positions) => {
+        this.positions.set(positions);
+        if (!this.selAsset && positions.length) {
+          this.selAsset = positions[0].symbol;
+          this.loadLevels();
+        }
+      },
     });
     this.api.get<Transaction[]>(`/portfolios/${id}/transactions`).subscribe({
       next: (transactions) => this.transactions.set(transactions),
     });
+    this.api.get<IncomeSummary>(`/portfolios/${id}/income`).subscribe({
+      next: (income) => this.income.set(income),
+      error: () => this.income.set(null),
+    });
+  }
+
+  viewCustom() {
+    const symbol = this.customSymbol.trim().toUpperCase();
+    if (!symbol) return;
+    this.selAsset = symbol;
+    this.customSymbol = '';
+    this.loadLevels();
+  }
+
+  loadLevels() {
+    if (!this.selAsset) return;
+    this.historyLoading.set(true);
+    this.historyError.set(null);
+    this.api
+      .get<LevelsResponse>(`/market/levels?symbol=${encodeURIComponent(this.selAsset)}&range=${this.period}`)
+      .subscribe({
+        next: (res) => {
+          this.historyLoading.set(false);
+          const points = res.points || [];
+          this.historyLabels.set(points.map((p) => p.date.slice(0, 10)));
+          this.historyValues.set(points.map((p) => p.close));
+          this.supports.set(res.supports || []);
+          this.resistances.set(res.resistances || []);
+          this.ma20.set(res.ma20 ?? null);
+          this.ma50.set(res.ma50 ?? null);
+          this.priceCurrency.set(res.currency || 'BRL');
+        },
+        error: (err) => {
+          this.historyLoading.set(false);
+          this.historyLabels.set([]);
+          this.historyValues.set([]);
+          this.supports.set([]);
+          this.resistances.set([]);
+          this.ma20.set(null);
+          this.ma50.set(null);
+          this.historyError.set(err?.error?.message || 'Sem histórico para este ativo.');
+        },
+      });
+  }
+
+  historyStats(): { min: number; max: number; changePct: number; ma20: number | null; ma50: number | null } | null {
+    const values = this.historyValues();
+    if (values.length < 2) return null;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const first = values[0];
+    const last = values[values.length - 1];
+    return {
+      min,
+      max,
+      changePct: first > 0 ? ((last - first) / first) * 100 : 0,
+      ma20: this.ma20(),
+      ma50: this.ma50(),
+    };
   }
 
   loadAssets() {
@@ -512,6 +722,14 @@ export class PortfolioComponent {
 
   money(value: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+  }
+
+  moneyC(value: number): string {
+    try {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: this.priceCurrency() || 'BRL' }).format(value || 0);
+    } catch {
+      return `${this.priceCurrency()} ${Number(value || 0).toFixed(2)}`;
+    }
   }
 
   label(value?: string): string {

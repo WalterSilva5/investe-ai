@@ -2,14 +2,20 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
 import { MacroService } from '../market/macro.service';
+import { QuotesService } from '../market/quotes.service';
 import { PortfoliosService } from '../portfolios/portfolios.service';
+import { LearningService } from '../learning/learning.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { NewsService } from '../insights/news.service';
 import {
   OPPORTUNITY_THEMES,
   OpportunityTheme,
   findOpportunityTheme,
 } from './opportunity-themes';
+import { buildThermometer } from './thermometer';
 import { OPPORTUNITY_CYCLES } from './opportunity-cycles';
+import { ContrarianInput, rankContrarian } from './contrarian';
+import { DISCOVERY_UNIVERSE } from '../discovery/universe';
 
 const BASE_PROMPT = `Você é um analista de narrativas e ciclos de mercado. Sua função é ajudar um investidor a ENTENDER uma "oportunidade" (tema/narrativa) e o estágio do ciclo — não a recomendar compra ou venda.
 
@@ -70,11 +76,16 @@ Responda APENAS um JSON válido (sem markdown):
   "watchPoints": ["..."]
 }`;
 
-const ACTIONS_PROMPT = `Gere DICAS DE AÇÃO por ativo da carteira (até 6), cruzando posições com radar e macro. Tom educacional; NÃO recomende compra/venda, NÃO preveja preço. Verbo de processo (observar, revisar, comparar, aguardar, anotar, checar resultado). Priorize: maior peso, maior resultado, HYPE/EMERGENTE, manchetes. TEXTOS CURTOS: action até 12 palavras; signal/why/risk até 8; summary 1 frase.
-Responda SÓ o JSON (sem markdown): {"title":"...","summary":"...","actions":[{"ticker":"...","type":"...","signal":"...","action":"...","why":"...","risk":"..."}]}`;
+const ACTIONS_PROMPT = `Gere DICAS DE AÇÃO por ativo da carteira (até 6), cruzando posições, momentum de preço, radar e macro. Tom direto de conselheiro, sem hedge.
+O campo "historicoDasRegras" traz a taxa de acerto medida das regras do próprio app: priorize as regras com melhor histórico e sinalize quando a amostra for pequena.
+Ordene por prioridade e eleja 1 DESTAQUE DO DIA (o mais quente). Cada dica tem: verdict (Oportunidade | Aguardar | Evitar), trigger (o que confirmaria) e invalidation (o que quebra a leitura). Cada dica CITA NÚMEROS do contexto.
+Linguagem de conselho, não de ordem: "faz sentido aumentar aos poucos", "não é hora de entrar", "realizar parcial é razoável" — evite o imperativo "compre/venda".
+TEXTOS CURTOS: action até 12 palavras; signal/why/risk/trigger/invalidation até 10; summary 1 frase.
+Responda SÓ o JSON (sem markdown): {"title":"...","summary":"...","actions":[{"ticker":"...","type":"...","signal":"...","action":"...","why":"...","risk":"...","verdict":"Oportunidade|Aguardar|Evitar","trigger":"...","invalidation":"...","highlight":true}] — só a 1ª com highlight:true}`;
 
-const ACTIONS_THEMES_PROMPT = `Gere DICAS DE AÇÃO por tema do radar (até 6, sem posições em carteira). Tom educacional; NÃO recomende compra/venda, NÃO preveja preço. Verbo de processo (observar, revisar, comparar, aguardar, anotar). Priorize: maior atenção, tendência, HYPE (alerta) / EMERGENTE (acompanhar). TEXTOS CURTOS: action até 12 palavras; signal/why/risk até 8 palavras; summary 1 frase.
-Responda SÓ o JSON (sem markdown): {"title":"...","summary":"...","actions":[{"theme":"...","signal":"...","action":"...","why":"...","risk":"..."}]}`;
+const ACTIONS_THEMES_PROMPT = `Gere DICAS DE AÇÃO por tema do radar (até 6, sem posições em carteira). Tom direto de conselheiro, sem hedge. Cada dica tem verdict (Oportunidade | Aguardar | Evitar), trigger e invalidation, e cita NÚMEROS (atenção, tendência, hype). Ordene por prioridade e eleja 1 DESTAQUE DO DIA. Linguagem de conselho, não de ordem.
+TEXTOS CURTOS: action até 12 palavras; signal/why/risk/trigger/invalidation até 10; summary 1 frase.
+Responda SÓ o JSON (sem markdown): {"title":"...","summary":"...","actions":[{"theme":"...","signal":"...","action":"...","why":"...","risk":"...","verdict":"Oportunidade|Aguardar|Evitar","trigger":"...","invalidation":"...","highlight":true}] — só a 1ª com highlight:true}`;
 
 function buildSystemPrompt(mode: string): string {
   return `${BASE_PROMPT}\n\n${mode === 'conservative' ? CONSERVATIVE_PROMPT : GROWTH_PROMPT}`;
@@ -97,6 +108,9 @@ export class OpportunitiesService {
     private readonly macro: MacroService,
     private readonly news: NewsService,
     private readonly portfolios: PortfoliosService,
+    private readonly quotes: QuotesService,
+    private readonly learning: LearningService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   themes() {
@@ -221,6 +235,97 @@ export class OpportunitiesService {
   }
 
   /**
+   * Radar contrário: papéis que caíram e mostram sinal de virada
+   * (sobrevenda, suporte próximo, ganho/risco e repique). Varre o mesmo
+   * universo da descoberta + posições da carteira.
+   */
+  async contrarian(tenantId: string, limit = 8) {
+    const portfolio = await this.portfolios.getDefaultPortfolio(tenantId);
+    const positions = portfolio
+      ? await this.portfolios.positions(tenantId, portfolio.id).catch(() => [])
+      : [];
+    const symbols = new Set<string>([
+      ...DISCOVERY_UNIVERSE.map((item) => item.symbol),
+      ...positions.map((pos) => pos.symbol),
+    ]);
+    const list = [...symbols];
+
+    const inputs: ContrarianInput[] = [];
+    const failures: string[] = [];
+    const CONCURRENCY = 4;
+    for (let i = 0; i < list.length; i += CONCURRENCY) {
+      const chunk = list.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map(async (symbol) => {
+          try {
+            const outlook = await this.quotes.outlook(symbol, '1y');
+            return { symbol, outlook };
+          } catch {
+            return { symbol, outlook: null };
+          }
+        }),
+      );
+      for (const result of results) {
+        if (!result.outlook) {
+          failures.push(result.symbol);
+          continue;
+        }
+        const o = result.outlook;
+        inputs.push({
+          symbol: o.symbol,
+          technicalScore: o.read.score,
+          trend: o.read.trend,
+          rsi: o.read.rsi14,
+          ratio: o.read.ratio,
+          change1d: o.read.dayChange,
+          change1m: o.read.monthChange,
+          change3m: o.read.quarterChange,
+          distSupportPct: o.read.downsidePct,
+          aboveMa20: o.read.ma20 != null && o.current >= o.read.ma20,
+        });
+      }
+    }
+
+    const ranked = rankContrarian(inputs, limit);
+    const items = ranked.map((item) => {
+      const outlook = inputs.find((input) => input.symbol === item.symbol);
+      return {
+        ...item,
+        drop3mPct: outlook?.change3m ?? null,
+        rsi14: outlook?.rsi ?? null,
+        distSupportPct: outlook?.distSupportPct ?? null,
+        ratio: outlook?.ratio ?? null,
+      };
+    });
+
+    // Sinal quente: reversão forte com nota alta vira notificação (dedupe por dia).
+    for (const item of items
+      .filter((item) => item.verdict === 'Reversão forte' && item.score >= 70)
+      .slice(0, 3)) {
+      await this.notifications
+        .notify(tenantId, {
+          kind: 'hot-reversal',
+          title: `🔥 Reversão forte em ${item.symbol} (nota ${item.score}/100)`,
+          body: item.reasons.join(' · ') + '. Papel que caiu e dá sinal de virada — revisar no Tracking.',
+          url: '/app/opportunities',
+          dedupeKey: `contrarian:${item.symbol}`,
+        })
+        .catch(() => undefined);
+    }
+
+    return { scanned: inputs.length, failures, items };
+  }
+
+  /** Histórico por dia: digest de cada geração (título, data e ações). */
+  actionsHistory(tenantId: string, take = 30) {
+    return this.prisma.actionDigest.findMany({
+      where: { tenantId },
+      orderBy: { generatedAt: 'desc' },
+      take: Math.min(Math.max(take, 1), 60),
+    });
+  }
+
+  /**
    * Gera dicas de ação por ativo da carteira (com contexto do radar + macro).
    * Sem posições: usa os temas do radar. Manual ou via cron.
    */
@@ -233,23 +338,52 @@ export class OpportunitiesService {
     const positions = portfolio
       ? await this.portfolios.positions(tenantId, portfolio.id).catch(() => [])
       : [];
+    // Momentum (3m) dos maiores pesos para as dicas citarem números reais.
+    const top = [...positions].sort((a, b) => b.currentValue - a.currentValue).slice(0, 5);
+    const momentums = await Promise.all(
+      top.map(async (pos) => {
+        try {
+          const lv = await this.quotes.levels(pos.symbol, '3mo');
+          const nearest = lv.supports[0];
+          return {
+            symbol: pos.symbol,
+            change3m: lv.changePct,
+            vsMA50: lv.ma50 != null ? Math.round(((lv.current - lv.ma50) / lv.ma50) * 10000) / 100 : null,
+            distSupportPct:
+              nearest != null && lv.current > 0
+                ? Math.round(((lv.current - nearest) / lv.current) * 10000) / 100
+                : null,
+          };
+        } catch {
+          return { symbol: pos.symbol, change3m: null, vsMA50: null, distSupportPct: null };
+        }
+      }),
+    );
+    const momentumBySymbol = new Map(momentums.map((m) => [m.symbol, m]));
     const withSignal = items.filter((i) => i.attention > 0 || i.latest || (i.trend ?? 0) !== 0);
     if (!positions.length && !withSignal.length) {
       throw new NotFoundException('Sem carteira nem movimento no radar para gerar dicas.');
     }
 
     const resolved = await this.registry.resolve(tenantId);
+    const learningStats = await this.learning.promptStats(tenantId).catch(() => null);
     const userContent = JSON.stringify({
       macro,
-      posicoes: positions.slice(0, 20).map((pos) => ({
-        ticker: pos.symbol,
-        tipo: pos.type,
-        qtd: pos.quantity,
-        precoMedio: pos.averagePrice,
-        valorAtual: pos.currentValue,
-        resultadoPct: pos.pnlPct,
-        semCotacao: !pos.hasMarketPrice,
-      })),
+      historicoDasRegras: learningStats,
+      posicoes: positions.slice(0, 20).map((pos) => {
+        const mom = momentumBySymbol.get(pos.symbol);
+        return {
+          ticker: pos.symbol,
+          tipo: pos.type,
+          qtd: pos.quantity,
+          precoMedio: pos.averagePrice,
+          valorAtual: pos.currentValue,
+          resultadoPct: Math.round(pos.pnlPct * 100) / 100,
+          variacao3mPct: mom?.change3m ?? null,
+          vsMM50Pct: mom?.vsMA50 ?? null,
+          distanciaSuportePct: mom?.distSupportPct ?? null,
+        };
+      }),
       radar: withSignal.slice(0, 14).map((i) => ({
         tema: i.slug,
         atencao: i.attention,
@@ -308,7 +442,7 @@ export class OpportunitiesService {
         tenantId,
         title: String(parsed.title || 'Dicas de ação').slice(0, 180),
         summary: String(parsed.summary || '').slice(0, 1500),
-        actions: actions.slice(0, 6) as never,
+        actions: actions.slice(0, 6).map((a, i) => ({ ...a, highlight: i === 0 })) as never,
         providerId: resolved.providerId,
         model: resolved.model,
       },
@@ -317,12 +451,28 @@ export class OpportunitiesService {
     const keep = await this.prisma.actionDigest.findMany({
       where: { tenantId },
       orderBy: { generatedAt: 'desc' },
-      take: 6,
+      take: 30,
       select: { id: true },
     });
     await this.prisma.actionDigest.deleteMany({
       where: { tenantId, id: { notIn: keep.map((k) => k.id) } },
     });
+
+    // Dicas "quentes": veredito Oportunidade vira notificação (destaque e demais).
+    for (const tip of actions
+      .filter((tip) => tip.verdict === 'Oportunidade')
+      .slice(0, 3)) {
+      const subject = tip.ticker || tip.theme || 'mercado';
+      await this.notifications
+        .notify(tenantId, {
+          kind: 'hot-tip',
+          title: `🔥 Oportunidade: ${subject}`,
+          body: `${tip.action || ''}. Sinal: ${tip.signal || ''}. ${tip.risk ? `Risco: ${tip.risk}` : ''}`.trim(),
+          url: '/app/opportunities',
+          dedupeKey: `tip:${subject}`,
+        })
+        .catch(() => undefined);
+    }
 
     return created;
   }
@@ -343,6 +493,14 @@ export class OpportunitiesService {
       if (!latestByTheme.has(brief.theme)) latestByTheme.set(brief.theme, brief);
     }
 
+    await this.recordSnapshots(
+      OPPORTUNITY_THEMES.map((theme) => ({
+        slug: theme.slug,
+        attention: headlines.filter((headline) => this.matchesTheme(headline.title, theme)).length,
+      })),
+    );
+    const trends = await this.trends();
+
     const items = OPPORTUNITY_THEMES.map((theme) => {
       const matches = headlines.filter((headline) => this.matchesTheme(headline.title, theme));
       const latest = latestByTheme.get(theme.slug);
@@ -352,11 +510,18 @@ export class OpportunitiesService {
         icon: theme.icon,
         description: theme.description,
         attention: matches.length,
+        trend: trends[theme.slug] ?? 0,
         headlines: matches.slice(0, 5).map((headline) => ({
           title: headline.title,
           source: headline.source,
           url: headline.url,
         })),
+        thermometer: buildThermometer({
+          attention: matches.length,
+          trend: trends[theme.slug] ?? 0,
+          stage: latest?.stage,
+          hypeRisk: latest?.hypeRisk,
+        }),
         latest: latest
           ? {
               id: latest.id,
@@ -371,10 +536,7 @@ export class OpportunitiesService {
       };
     });
 
-    await this.recordSnapshots(items);
-    const trends = await this.trends();
-
-    return items.map((item) => ({ ...item, trend: trends[item.slug] ?? 0 }));
+    return items;
   }
 
   /** Registra um snapshot por dia (atenção global de notícias). */
@@ -426,27 +588,33 @@ export class OpportunitiesService {
     const hypeRisk = this.hypeRisk(attention, crypto);
 
     const resolved = await this.registry.resolve(tenantId);
-    const result = await resolved.provider.chat(
-      [
-        { role: 'system', content: buildSystemPrompt(normalizedMode) },
-        {
-          role: 'user',
-          content: [
-            `Tema: ${theme.name}`,
-            `Descrição: ${theme.description}`,
-            `Perguntas-guia: ${theme.questions.join(' | ')}`,
-            `Manchetes relacionadas (${matches.length}):`,
-            matches.map((headline) => `- [${headline.source}] ${headline.title}`).join('\n') ||
-              '(nenhuma manchete no momento)',
-            `Dados de mercado: ${JSON.stringify(crypto)}`,
-            `Macro: ${JSON.stringify(macro)}`,
-          ].join('\n'),
-        },
-      ],
-      { model: resolved.model, temperature: 0.4, maxTokens: 1800 },
-    );
+    // O provedor às vezes devolve vazio/truncado: até 2 tentativas + orçamento
+    // folgado (o raciocínio consome tokens antes do JSON).
+    let result: { content?: string | null } | null = null;
+    for (let attempt = 0; attempt < 2 && !result?.content?.trim(); attempt += 1) {
+      if (attempt > 0) this.logger.warn(`Análise ${theme.slug}: repetindo resposta vazia (tentativa ${attempt + 1}).`);
+      result = await resolved.provider.chat(
+        [
+          { role: 'system', content: buildSystemPrompt(normalizedMode) },
+          {
+            role: 'user',
+            content: [
+              `Tema: ${theme.name}`,
+              `Descrição: ${theme.description}`,
+              `Perguntas-guia: ${theme.questions.join(' | ')}`,
+              `Manchetes relacionadas (${matches.length}):`,
+              matches.map((headline) => `- [${headline.source}] ${headline.title}`).join('\n') ||
+                '(nenhuma manchete no momento)',
+              `Dados de mercado: ${JSON.stringify(crypto)}`,
+              `Macro: ${JSON.stringify(macro)}`,
+            ].join('\n'),
+          },
+        ],
+        { model: resolved.model, temperature: 0.4, maxTokens: 6000 },
+      );
+    }
 
-    const parsed = this.parseJson(result.content);
+    const parsed = this.parseJson(result?.content || '');
     const brief = await this.prisma.opportunityBrief.create({
       data: {
         tenantId,
@@ -601,21 +769,49 @@ export class OpportunitiesService {
     return attempt(content) ?? attempt(repair(content)) ?? {};
   }
 
+  /** Parse tolerante: repara quebras literais/vírgulas finais (mesma técnica dos insights). */
   private parseJson(content: string): Record<string, unknown> {
-    try {
-      const trimmed = content
-        .trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/, '')
-        .trim();
-      const start = trimmed.indexOf('{');
-      const end = trimmed.lastIndexOf('}');
-      if (start === -1 || end === -1 || end <= start) return {};
-      const parsed = JSON.parse(trimmed.slice(start, end + 1));
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-    } catch (error) {
-      this.logger.warn(`Falha ao parsear análise de oportunidade: ${(error as Error).message}`);
-      return {};
-    }
+    const attempt = (text: string): Record<string, unknown> | null => {
+      try {
+        const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+        const start = trimmed.indexOf('{');
+        const end = trimmed.lastIndexOf('}');
+        if (start === -1 || end <= start) return null;
+        const parsed = JSON.parse(trimmed.slice(start, end + 1)) as unknown;
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+      } catch {
+        return null;
+      }
+    };
+    const repair = (text: string): string => {
+      let out = '';
+      let inStr = false;
+      let esc = false;
+      for (const ch of text) {
+        if (esc) {
+          out += ch;
+          esc = false;
+          continue;
+        }
+        if (ch === '\\') {
+          out += ch;
+          if (inStr) esc = true;
+          continue;
+        }
+        if (ch === '"') {
+          inStr = !inStr;
+          out += ch;
+          continue;
+        }
+        if (inStr && ch < ' ') {
+          out += ' ';
+          continue;
+        }
+        out += ch;
+      }
+      return out.replace(/,(\s*[}\]])/g, '$1');
+    };
+    const raw = content || '';
+    return attempt(raw) ?? attempt(repair(raw)) ?? {};
   }
 }

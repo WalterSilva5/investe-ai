@@ -50,4 +50,21 @@ export class MacroService {
     if (!data.length) throw new Error(`BCB ${code}: série vazia`);
     return Number(data[0].valor.replace(',', '.'));
   }
+
+  /** Série diária do CDI (código 12) num intervalo — para acumular juros reais. */
+  async cdiSeriesDaily(from: Date, to: Date): Promise<Array<{ date: string; pct: number }>> {
+    const fmt = (date: Date) =>
+      `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+    const url = `${BCB}.12/dados?formato=json&dataInicial=${fmt(from)}&dataFinal=${fmt(to)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`BCB CDI: HTTP ${response.status}`);
+    const data = (await response.json()) as Array<{ data: string; valor: string }>;
+    return data.map((row) => {
+      const [dd, mm, yyyy] = row.data.split('/');
+      return {
+        date: `${yyyy}-${mm}-${dd}`,
+        pct: Number(row.valor.replace(',', '.')),
+      };
+    });
+  }
 }

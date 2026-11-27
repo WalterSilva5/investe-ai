@@ -42,6 +42,16 @@ export class OpportunitiesController {
     return this.opportunities.latestActions(tenantId);
   }
 
+  @Get('action-tips/history')
+  actionTipsHistory(@TenantId() tenantId: string) {
+    return this.opportunities.actionsHistory(tenantId);
+  }
+
+  @Get('contrarian')
+  contrarian(@TenantId() tenantId: string, @Query('limit') limit?: string) {
+    return this.opportunities.contrarian(tenantId, limit ? Number(limit) : 8);
+  }
+
   @Post('action-tips/refresh')
   refreshActionTips(@TenantId() tenantId: string) {
     return this.opportunities.refreshActions(tenantId);

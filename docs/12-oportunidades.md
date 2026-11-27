@@ -36,6 +36,34 @@ Ajudar o investidor a **entender narrativas e ciclos de mercado** — tech (IA, 
 - **Atenção:** número de manchetes (RSS) que casam com as palavras-chave do tema.
 - **Hype risk (0–100):** heurística que combina atenção + volatilidade recente (quando o tema tem cripto). É um **indicador de risco**, não uma previsão.
 - **Estágio:** definido pela análise de IA a partir do contexto (manchetes, macro, dados de mercado).
+- **Termômetro (por card):** separa **força do tema** (score 0–100: estágio ±, tendência ×4, atenção até +5, hype −0,25/ponto; ≥70 Forte, 40–69 Neutro, <40 Fraco) da **leitura** (Bullish/Neutro/Bearish: com análise, HYPE/declínio/desilusão → Bearish, tendência ≥+3 ou EMERGENTE → Bullish, tendência ≤−3 → Bearish; sem análise, a tendência manda: ≥+2 Bullish, ≤−2 Bearish). Cada card traz também uma **dica curta** ("acompanhar de perto", "aguardar virada", "risco de topo"). Setor forte + leitura fraca = **divergência: cautela com o tema**.
+
+## Radar contrário (quedas com sinal de virada)
+
+- Varre o universo da descoberta + posições da carteira e calcula uma **nota de reversão (0–100)**: RSI em sobrevenda (+30), proximidade do suporte (+20), ganho/risco (+20), repique no dia (+10), queda de 10%+ em 3 meses (+10), mês melhor que o trimestre (+8) e recuperação da MM20 (+8).
+- Papel já em tendência de alta forte ou esticado (RSI > 60) **não entra** — o foco é o que caiu, não o que já subiu.
+- Vereditos: `Reversão forte` (≥60), `Reversão em formação` (40–59), `Aguardar` (25–39); abaixo disso não aparece.
+- A lista mostra queda em 3m, RSI, distância do suporte, ganho/risco e os motivos, com atalho para salvar na watchlist ou abrir no Tracking.
+
+## Ciclo do halving (BTC)
+
+- Calcula, na data atual, os dias desde o último halving e até o próximo (estimado, ~210 mil blocos).
+- Fases: pós-halving imediato → expansão → bull run/topo histórico (380–550 dias após) → distribuição → bear; a **≤600 dias do próximo halving** a fase é "pré-halving (zona histórica de acumulação)".
+- Em 27/11/2026: **~505 dias** para o próximo halving, fase de acumulação — os fundos de 2016, 2020 e 2024 ocorreram ~500 dias antes do halving (padrão observado, não garantia).
+- O contexto entra no outlook de BTC/ETH (Tracking e tool `get_stock_outlook` do chat) com a tabela de referência dos ciclos.
+
+## Vidente de dicas (análise geral)
+
+- Varre o universo (B3, EUA e cripto), identifica o **padrão que cada papel vive agora** (teste de suporte, RSI em sobrevenda ou cruzamento da MM50) e puxa o histórico desse padrão no próprio papel.
+- **Nota 0–100**: acerto suavizado (Laplace) + retorno médio em 10 pregões + ajuste pelo veredito atual (Oportunidade +10, Evitar −15). Só entra com **8+ casos**.
+- Ordena o ranking e mostra **qual padrão tem funcionado melhor no universo** (acerto ponderado e retorno médio em 10/20 pregões).
+- Atalhos para abrir no Tracking ou salvar na watchlist. Amostra pequena não entra — evita "vidente" com 3 casos.
+
+## Dicas de ação (postura de conselho)
+- Cada dica vem com **veredito** (`Oportunidade`, `Aguardar`, `Evitar`), **gatilho de confirmação** e **o que invalida** a leitura, além dos números que a sustentam.
+- Linguagem de conselho, não de ordem: "faz sentido aumentar aos poucos", "não é hora de entrar", "realizar parcial é razoável".
+- Com posições, as dicas são por ticker (momentum, distância de suporte/média, resultado); sem carteira, por tema (atenção, tendência, hype).
+- Mantém-se o marco educacional: sem previsão de preço e sem promessa de retorno.
 
 ## Modos de análise
 

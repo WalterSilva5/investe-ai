@@ -68,11 +68,18 @@ model Tenant {
   memories     Memory[]
   insights     Insight[]
   statements   BankStatement[]
+  financeBooks FinanceBook[]
   opportunityBriefs OpportunityBrief[]
   cycleSummaries CycleSummary[]
   actionDigests ActionDigest[]
+  signalLogs SignalLog[]
+  trackedSymbols TrackedSymbol[]
+  promptEvalRuns PromptEvalRun[]
+  lessonProgress LessonProgress[]
+  notifications Notification[]
   businessProfile BusinessProfile?
   businessIdeas BusinessIdea[]
+  orderProposals OrderProposal[]
 }
 
 model User {
@@ -363,7 +370,7 @@ model Goal {
   id           String   @id @default(cuid())
   tenantId     String
   name         String
-  targetAmount Decimal 
+  targetAmount Decimal
   targetDate   DateTime?
   priority     Int      @default(1)
   createdAt    DateTime @default(now())
@@ -371,6 +378,40 @@ model Goal {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+/// Livro de finanças do usuário: 'pessoal' ou 'empresa'. O caixa atual e a
+/// reserva são o estado; as entradas são o fluxo (receitas/despesas) usado
+/// para calcular excedente mensal e disponível para investir.
+model FinanceBook {
+  id               String   @id @default(cuid())
+  tenantId         String
+  kind             String   // 'pessoal' | 'empresa'
+  label            String
+  cashBalance      Decimal  @default(0)
+  emergencyReserve Decimal  @default(0)
+  createdAt        DateTime @default(now())
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entries FinanceEntry[]
+
+  @@unique([tenantId, kind])
+  @@index([tenantId])
+}
+
+model FinanceEntry {
+  id        String   @id @default(cuid())
+  bookId    String
+  kind      String   // 'income' | 'expense'
+  amount    Decimal
+  category  String?
+  note      String?
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  book FinanceBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId, date])
 }
 
 model AlertRule {
@@ -647,4 +688,150 @@ model ActionDigest {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, generatedAt])
+}
+
+model SignalLog {
+  id          String    @id @default(cuid())
+  tenantId    String
+  symbol      String
+  kind        String    @default("outlook")
+  rule        String
+  direction   String
+  score       Int       @default(50)
+  price       Float
+  target      Float?
+  stop        Float?
+  day         String
+  createdAt   DateTime  @default(now())
+  evaluatedAt DateTime?
+  outcome     String    @default("pending")
+  returnPct   Float?
+  priceAfter  Float?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, symbol, rule, day])
+  @@index([tenantId, day])
+  @@index([tenantId, outcome])
+}
+
+model TrackedSymbol {
+  id        String   @id @default(cuid())
+  tenantId  String
+  symbol    String
+  source    String   @default("discovered")
+  score     Int      @default(0)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, symbol])
+  @@index([tenantId, score])
+}
+
+model AgentPrompt {
+  id           String    @id @default(cuid())
+  profileId    String
+  version      Int
+  status       String    @default("candidate")
+  systemPrompt String
+  notes        String?
+  evalScore    Float?
+  evalDetails  Json?
+  createdAt    DateTime  @default(now())
+  activatedAt  DateTime?
+
+  runs PromptEvalRun[]
+
+  @@unique([profileId, version])
+  @@index([profileId, status])
+}
+
+model OrderProposal {
+  id          String    @id @default(cuid())
+  tenantId    String
+  portfolioId String?
+  symbol      String
+  side        String // BUY | SELL
+  quantity    Float
+  price       Float
+  score       Int       @default(0)
+  rule        String // ex.: contrarian, action-tips, seer
+  verdict     String // Oportunidade | Aguardar | Evitar
+  reason      String?
+  status      String    @default("paper") // paper | executed | rejected
+  executedAt  DateTime?
+  paperPrice  Float?
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+}
+
+model PromptEvalRun {
+  id        String   @id @default(cuid())
+  promptId  String
+  tenantId  String
+  score     Float
+  results   Json
+  createdAt DateTime @default(now())
+
+  prompt AgentPrompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([promptId, createdAt])
+}
+
+/// Backtest de prompts por classe de ativo: um run por (classe, variante).
+model PromptSimRun {
+  id        String   @id @default(cuid())
+  classId   String
+  variantId String
+  symbols   Json
+  anchors   Int
+  calls     Int
+  hits      Int
+  hitRate   Float
+  score     Float
+  details   Json?
+  model     String?
+  createdAt DateTime @default(now())
+
+  @@index([classId, createdAt])
+  @@index([classId, score])
+}
+
+model LessonProgress {
+  id         String   @id @default(cuid())
+  tenantId   String
+  lessonId   String
+  attempts   Int      @default(0)
+  correct    Boolean  @default(false)
+  completedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, lessonId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  kind      String   @default("hot-opportunity")
+  title     String
+  body      String
+  url       String?
+  dedupeKey String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId, read, createdAt])
 }

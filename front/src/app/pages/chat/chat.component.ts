@@ -1,6 +1,15 @@
 import { SlicePipe } from '@angular/common';
-import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  ViewChild,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { retry, throwError, timer, OperatorFunction } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { API_BASE_URL } from '../../core/api.config';
@@ -165,13 +174,30 @@ interface AgentTool {
         </button>
       }
 
+      <div class="chat-attach" style="margin-bottom:8px">
+        @if (attachedImage(); as image) {
+          <span class="attach-chip">
+            <img [src]="image" alt="imagem anexada" />
+            <button class="attach-remove" type="button" (click)="removeImage()" title="Remover imagem">×</button>
+          </span>
+        }
+      </div>
+
       <div class="chat-input">
         <input
           class="input"
           [(ngModel)]="text"
           (keyup.enter)="send()"
-          placeholder="Digite sua pergunta…"
+          placeholder="Digite sua pergunta… (cole ou anexe uma imagem para o agente ler)"
           [disabled]="loading()"
+        />
+        <button class="btn secondary" (click)="imageInput.click()" [disabled]="loading()" title="Anexar imagem">📎</button>
+        <input
+          #imageInput
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          style="display:none"
+          (change)="onImageSelected($event)"
         />
         @if (loading()) {
           <button class="btn secondary" (click)="stop()">Parar</button>
@@ -187,8 +213,15 @@ interface AgentTool {
 })
 export class ChatComponent {
   private readonly api = inject(ApiService);
+  private readonly route = inject(ActivatedRoute);
+
+  @HostListener('document:paste', ['$event'])
+  onDocumentPasteEvent(event: ClipboardEvent) {
+    this.onDocumentPaste(event);
+  }
 
   readonly messages = signal<ChatMessage[]>([]);
+  readonly attachedImage = signal<string | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly conversations = signal<ConversationSummary[]>([]);
@@ -197,12 +230,53 @@ export class ChatComponent {
   readonly showTools = signal(false);
 
   private aborter: AbortController | null = null;
+  /** true quando o stream já entregou pelo menos um delta (diferencia quebra no início × no meio). */
+  private streamedPartial = false;
+  private streamStarted(): boolean {
+    return this.streamedPartial;
+  }
 
   text = '';
   conversationId: string | null = null;
   profile = 'geral';
 
   @ViewChild('chatBox') chatBox?: ElementRef<HTMLElement>;
+
+  /** Recebe imagens coladas (Ctrl+V) em qualquer lugar da página. */
+  onDocumentPaste(event: ClipboardEvent) {
+    const item = Array.from(event.clipboardData?.items || []).find((entry) =>
+      entry.type.startsWith('image/'),
+    );
+    if (!item) return;
+    const file = item.getAsFile();
+    if (file) this.readImage(file);
+  }
+
+  onImageSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) this.readImage(file);
+    input.value = '';
+  }
+
+  readImage(file: File) {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 3 * 1024 * 1024) {
+      this.error.set('Imagem muito grande (máx 3 MB).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.attachedImage.set(String(reader.result || ''));
+      this.error.set(null);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  removeImage() {
+    this.attachedImage.set(null);
+  }
+
   readonly showEnd = signal(false);
   private pinned = true;
 
@@ -235,6 +309,22 @@ export class ChatComponent {
       next: (profiles) => this.profiles.set(profiles),
     });
     this.loadTools();
+    // Vem do Radar ("Analisar no chat"): auto-dispara a análise do tema.
+    const theme = this.route.snapshot.queryParamMap.get('theme');
+    if (theme) {
+      const name = this.route.snapshot.queryParamMap.get('themeName') || theme;
+      const mode = this.route.snapshot.queryParamMap.get('mode') || 'growth';
+      const modeLabel = mode === 'conservative' ? 'conservador' : 'crescimento máximo';
+      this.text =
+        `Analise o tema "${name}" (${theme}) em detalhe: use analyze_theme no modo ${modeLabel} ` +
+        `e leia estágio, evidências, riscos e regras de saída. ` +
+        `Depois sugira 3 a 5 oportunidades CONCRETAS dentro do tema (tickers, BDRs ou setores), ` +
+        `verificando cada uma com get_stock_outlook. Salve as melhores na watchlist com track_symbol, ` +
+        `com nota curta e objetiva.`;
+      setTimeout(() => {
+        if (this.text.trim()) this.send();
+      }, 400);
+    }
   }
 
   onProfileChange() {
@@ -307,22 +397,42 @@ export class ChatComponent {
         this.loadConversations();
         return;
       }
-      // fallback não-streaming
+      if (this.streamStarted()) {
+        // O stream quebrou NO MEIO (deltas já recebidos): re-enviar rodaria tudo
+        // de novo (ferramentas, cota de tokens). Mantém o parcial e avisa.
+        this.error.set(
+          'A conexão do stream caiu no meio da resposta (API reiniciando ou rede instável). A parte já gerada está acima; reenvie se quiser a resposta completa.',
+        );
+        this.loading.set(false);
+        this.loadConversations();
+        return;
+      }
+      // fallback não-streaming (com 1 retry para API reiniciando/fora do ar)
       this.api
         .post<ChatResponse>('/ai/chat', {
           message: content,
           conversationId: this.conversationId,
           profile: this.profile || undefined,
+          image: this.attachedImage() || undefined,
         })
+        .pipe(this.retryOnceOnNetworkError())
         .subscribe({
-          next: (res) => this.applyResponse(res),
+          next: (res) => {
+            this.attachedImage.set(null);
+            this.applyResponse(res);
+          },
           error: (e) => this.failChat(e),
         });
     });
   }
 
   stop() {
-    this.aborter?.abort();
+    if (this.aborter) {
+      this.aborter.abort();
+    } else if (this.loading()) {
+      // sem requisição ativa mas UI travada: libera para nova tentativa
+      this.loading.set(false);
+    }
   }
 
   thinkTime(steps: ChatStep[]): number {
@@ -348,11 +458,35 @@ export class ChatComponent {
   }
 
   private failChat(err: any) {
-    this.error.set(err?.error?.message || 'Falha ao consultar o agente. Verifique o provedor configurado.');
+    const status = err?.status;
+    const message =
+      err?.error?.message ||
+      (status === 429
+        ? 'Limite mensal de uso da IA atingido — aumenta em back/.env (AI_MONTHLY_TOKEN_QUOTA) ou aguarda o reset no dia 1º.'
+        : status === 0 || status === 503
+          ? 'API indisponível no momento (reiniciando?). Tentando de novo não funcionou — aguarde alguns segundos e reenvie.'
+          : 'Falha ao consultar o agente. Verifique o provedor configurado.');
+    this.error.set(message);
     this.loading.set(false);
   }
 
+  /** Retry único (2s) para falha de rede/503 — cobre API reiniciando. */
+  private retryOnceOnNetworkError<T>(): OperatorFunction<T, T> {
+    return retry({
+      delay: (error: unknown, count: number) =>
+        count < 2 &&
+        (typeof error === 'object' &&
+          error != null &&
+          'status' in error &&
+          ((error as { status: number }).status === 0 ||
+            (error as { status: number }).status === 503))
+          ? timer(2000)
+          : throwError(() => error),
+    });
+  }
+
   private async streamSend(content: string): Promise<void> {
+    this.streamedPartial = false;
     const token = localStorage.getItem('wsi.accessToken');
     const tenantId = localStorage.getItem('wsi.tenantId');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -367,8 +501,10 @@ export class ChatComponent {
         message: content,
         conversationId: this.conversationId,
         profile: this.profile || undefined,
+        image: this.attachedImage() || undefined,
       }),
     });
+    this.attachedImage.set(null);
 
     if (!response.ok || !response.body) {
       throw new Error('stream indisponível');
@@ -423,6 +559,7 @@ export class ChatComponent {
           steps = event.steps || [];
           setAssistant(full);
         } else if (event.type === 'delta') {
+          this.streamedPartial = true;
           full += event.content || '';
           setAssistant(full);
         } else if (event.type === 'aborted') {

@@ -1,4 +1,5 @@
 import { OpportunitiesService } from './opportunities.service';
+import { buildThermometer } from './thermometer';
 
 describe('OpportunitiesService', () => {
   const prisma = {
@@ -30,6 +31,10 @@ describe('OpportunitiesService', () => {
       registry as never,
       macro as never,
       news as never,
+      {} as never,
+      {} as never,
+      { promptStats: jest.fn().mockResolvedValue(null) } as never,
+      { notify: jest.fn().mockResolvedValue({}) } as never,
     );
   });
 
@@ -80,5 +85,40 @@ describe('OpportunitiesService', () => {
 
   it('rejeita tema inexistente', async () => {
     await expect(service.analyze('t1', 'tema-que-nao-existe')).rejects.toThrow();
+  });
+
+  describe('termômetro', () => {
+    it('tema quente em maturação é forte', () => {
+      const t = buildThermometer({ attention: 8, trend: 4, stage: 'MATURACAO', hypeRisk: 20 });
+      expect(t.score).toBeGreaterThanOrEqual(70);
+      expect(t.label).toBe('Forte');
+    });
+
+    it('hype vira leitura bearish mesmo com atenção alta', () => {
+      const t = buildThermometer({ attention: 9, trend: 5, stage: 'HYPE', hypeRisk: 80 });
+      expect(t.reading).toBe('Bearish');
+    });
+
+    it('sem dados fica neutro no meio da escala', () => {
+      const t = buildThermometer({});
+      expect(t.score).toBe(50);
+      expect(t.label).toBe('Neutro');
+      expect(t.reading).toBe('Neutro');
+    });
+
+    it('sem análise, tendência de queda vira bearish', () => {
+      const t = buildThermometer({ attention: 7, trend: -2 });
+      expect(t.reading).toBe('Bearish');
+    });
+
+    it('sem análise, tendência de alta vira bullish', () => {
+      const t = buildThermometer({ attention: 3, trend: 2 });
+      expect(t.reading).toBe('Bullish');
+    });
+
+    it('emergente com tendência é bullish', () => {
+      const t = buildThermometer({ attention: 2, trend: 3, stage: 'EMERGENTE', hypeRisk: 10 });
+      expect(t.reading).toBe('Bullish');
+    });
   });
 });

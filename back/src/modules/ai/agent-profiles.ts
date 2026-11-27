@@ -25,7 +25,7 @@ export const AGENT_PROFILES: AgentProfile[] = [
     icon: '📊',
     systemPrompt:
       'Você é um analista de renda fixa. Foque em: taxa equivalente, marcação a mercado, duration, IR regressivo, FGC e escada de vencimentos. Compare produtos usando os números do contexto e cite a fonte.',
-    tools: ['get_macro', 'simulate_fixed_income', 'get_portfolio_summary', 'get_allocation', 'get_briefing', 'get_insights', 'create_note', 'verify_tools'],
+    tools: ['get_macro', 'simulate_fixed_income', 'get_portfolio_summary', 'get_allocation', 'get_briefing', 'get_insights', 'create_note', 'verify_tools', 'track_symbol', 'get_stock_outlook', 'analyze_theme', 'compare_assets', 'correlation', 'portfolio_backtest'],
   },
   {
     id: 'planejador',
@@ -37,6 +37,12 @@ export const AGENT_PROFILES: AgentProfile[] = [
     tools: [
       'get_portfolio_summary',
       'get_allocation',
+      'get_cash_position',
+      'add_finance_entry',
+      'update_cash',
+      'compare_assets',
+      'correlation',
+      'portfolio_backtest',
       'project_runway',
       'project_income',
       'check_rebalance',
@@ -45,6 +51,9 @@ export const AGENT_PROFILES: AgentProfile[] = [
       'get_briefing',
       'get_insights',
       'verify_tools',
+      'track_symbol',
+      'get_stock_outlook',
+      'analyze_theme',
     ],
   },
   {
@@ -54,7 +63,7 @@ export const AGENT_PROFILES: AgentProfile[] = [
     icon: '🌐',
     systemPrompt:
       'Você é um analista de cenário macro. Foque em: Selic, IPCA, CDI, ciclo de juros e como cada classe reage. Trate números oficiais como alegações do governo — cruze com mercado e aponte risco fiscal. Explique causa e efeito, sem prever o futuro e sem agir por manchete.',
-    tools: ['get_macro', 'get_portfolio_summary', 'search_documents', 'create_note', 'get_briefing', 'get_insights', 'web_search', 'fetch_page', 'verify_tools'],
+    tools: ['get_macro', 'get_portfolio_summary', 'search_documents', 'create_note', 'get_briefing', 'get_insights', 'web_search', 'fetch_page', 'verify_tools', 'track_symbol', 'get_stock_outlook', 'analyze_theme'],
   },
   {
     id: 'cripto',
@@ -63,7 +72,7 @@ export const AGENT_PROFILES: AgentProfile[] = [
     icon: '₿',
     systemPrompt:
       'Você é um especialista educacional em cripto. Foque em: diferença entre Bitcoin e altcoins, custódia própria, segurança, volatilidade real e tributação (IN 1888). Nunca preveja preço nem recomende compra.',
-    tools: ['get_positions', 'get_allocation', 'search_documents', 'create_note', 'search_memory', 'get_briefing', 'get_insights', 'web_search', 'fetch_page', 'verify_tools'],
+    tools: ['get_positions', 'get_allocation', 'search_documents', 'create_note', 'search_memory', 'get_briefing', 'get_insights', 'web_search', 'fetch_page', 'verify_tools', 'track_symbol', 'get_stock_outlook', 'analyze_theme'],
   },
 ];
 

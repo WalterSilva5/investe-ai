@@ -1,6 +1,10 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { AccordionModule } from 'primeng/accordion';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+import { ButtonModule } from 'primeng/button';
 import { ApiService } from '../../core/api.service';
 
 interface RadarItem {
@@ -10,6 +14,7 @@ interface RadarItem {
   description: string;
   attention: number;
   trend?: number;
+  thermometer?: { score: number; label: string; reading: string; tip?: string } | null;
   headlines: Array<{ title: string; source: string; url: string }>;
   latest: {
     id: string;
@@ -50,6 +55,10 @@ interface ActionTip {
   action: string;
   why: string;
   risk: string;
+  verdict?: string;
+  trigger?: string;
+  invalidation?: string;
+  highlight?: boolean;
 }
 
 interface ActionDigest {
@@ -58,6 +67,17 @@ interface ActionDigest {
   summary: string;
   actions?: ActionTip[] | null;
   generatedAt: string;
+}
+
+interface ContrarianItem {
+  symbol: string;
+  score: number;
+  verdict: string;
+  reasons: string[];
+  drop3mPct: number | null;
+  rsi14: number | null;
+  distSupportPct: number | null;
+  ratio: number | null;
 }
 
 interface BriefContent {
@@ -92,7 +112,7 @@ interface Brief {
 
 @Component({
   selector: 'app-opportunities',
-  imports: [DatePipe, AccordionModule],
+  imports: [DatePipe, AccordionModule, TableModule, TagModule, ButtonModule, RouterLink],
   template: `
     <h1 class="page-title">Radar de oportunidades</h1>
     <p class="page-sub">
@@ -112,6 +132,12 @@ interface Brief {
       <span class="badge mode-conservative">Preservação (conservador)</span>
       <span class="badge off">Sem análise</span>
     </div>
+    <div class="legend" style="margin-bottom:16px">
+      <span class="legend-title">Termômetro: força do tema (0–100) × leitura de momento.</span>
+      <span class="badge read-bullish">Bullish</span>
+      <span class="badge read-neutro">Neutro</span>
+      <span class="badge read-bearish">Bearish</span>
+    </div>
 
     <div class="field" style="max-width:420px;margin-bottom:18px">
       <label>Modo da análise</label>
@@ -124,6 +150,84 @@ interface Brief {
     @if (error()) {
       <div class="alert error">{{ error() }}</div>
     }
+
+    <section class="section" style="margin-top:0;margin-bottom:28px">
+      <div class="insights-head">
+        <div>
+          <h2>Oportunidades em queda (reversão)</h2>
+          <p class="muted small">
+            Papéis que caíram e começam a dar sinal de virada: sobrevenda, suporte próximo, ganho/risco e
+            repique. Varre o universo + sua carteira. O oposto do radar de tendência — aqui o foco é o que
+            caiu, não o que já subiu.
+          </p>
+        </div>
+        <button class="btn secondary" [disabled]="contrarianLoading()" (click)="runContrarian()">
+          {{ contrarianLoading() ? 'Analisando quedas…' : 'Analisar quedas' }}
+        </button>
+      </div>
+
+      @if (contrarian().length) {
+        <div class="muted small" style="margin-bottom:8px">
+          {{ contrarianScanned() }} papéis varridos · {{ contrarian().length }} com sinal de virada
+        </div>
+        <p-table [value]="contrarian()" stripedRows>
+          <ng-template #header>
+            <tr>
+              <th>Ativo</th>
+              <th>Nota de reversão</th>
+              <th>Veredito</th>
+              <th>Queda 3m</th>
+              <th>RSI</th>
+              <th>Do suporte</th>
+              <th>Ganho/risco</th>
+              <th>Por que entrou</th>
+              <th></th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-row>
+            <tr>
+              <td><strong>{{ row.symbol }}</strong></td>
+              <td>
+                <p-tag
+                  [value]="row.score + '/100'"
+                  [severity]="row.score >= 60 ? 'success' : row.score >= 40 ? 'warn' : 'secondary'"
+                />
+              </td>
+              <td><p-tag [value]="row.verdict" [severity]="verdictSeverity(row.verdict)" /></td>
+              <td>{{ row.drop3mPct != null ? row.drop3mPct.toFixed(1) + '%' : '—' }}</td>
+              <td>{{ row.rsi14 != null ? row.rsi14.toFixed(0) : '—' }}</td>
+              <td>{{ row.distSupportPct != null ? row.distSupportPct.toFixed(1) + '%' : '—' }}</td>
+              <td>{{ row.ratio != null ? row.ratio.toFixed(2) + ':1' : '—' }}</td>
+              <td class="small" style="min-width:240px">{{ row.reasons.join(' · ') }}</td>
+              <td style="white-space:nowrap">
+                <p-button
+                  label="Salvar"
+                  size="small"
+                  severity="secondary"
+                  [outlined]="true"
+                  (onClick)="trackContrarian(row.symbol)"
+                />
+                <p-button
+                  label="Tracking"
+                  size="small"
+                  severity="secondary"
+                  [text]="true"
+                  [routerLink]="['/app/tracking']"
+                  [queryParams]="{ symbol: row.symbol }"
+                />
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      } @else if (!contrarianLoading()) {
+        <div class="row">
+          <div>
+            <div class="name">Nenhuma análise de queda ainda</div>
+            <div class="meta">Clique em "Analisar quedas" para varrer o universo e a carteira.</div>
+          </div>
+        </div>
+      }
+    </section>
 
     <section class="section" style="margin-top:0;margin-bottom:28px">
       <div class="insights-head">
@@ -154,12 +258,20 @@ interface Brief {
                 <p-accordion-panel [value]="$index">
                   <p-accordion-header>
                     <span class="tip-title">{{ tip.ticker || tip.theme }}</span>
+                    @if (tip.verdict) {
+                      <span class="badge {{ verdictBadge(tip.verdict) }}">{{ tip.verdict }}</span>
+                    }
+                    @if (tip.highlight) {
+                      <span class="badge mode-conservative">Destaque do dia</span>
+                    }
                     <span class="badge mode-growth">{{ tip.signal }}</span>
                   </p-accordion-header>
                   <p-accordion-content>
                     <div class="name">{{ tip.action }}</div>
                     <div class="meta" style="margin-top:6px">
                       @if (tip.why) { <div><strong>Por quê:</strong> {{ tip.why }}</div> }
+                      @if (tip.trigger) { <div><strong>Confirma se:</strong> {{ tip.trigger }}</div> }
+                      @if (tip.invalidation) { <div><strong>Invalida se:</strong> {{ tip.invalidation }}</div> }
                       @if (tip.risk) { <div><strong>Risco:</strong> {{ tip.risk }}</div> }
                       @if (tip.theme && tip.ticker && tip.theme !== tip.ticker) {
                         <div><strong>Tema:</strong> {{ tip.theme }}</div>
@@ -178,6 +290,39 @@ interface Brief {
             <div class="meta">Clique em "Gerar dicas" para analisar o estado atual do radar.</div>
           </div>
         </div>
+      }
+
+      @if (pastTips().length) {
+        <h3 style="margin:20px 0 8px;font-size:15px">Histórico por dia</h3>
+        <p-accordion styleClass="tips-accordion">
+          @for (day of pastTips(); track day.id) {
+            <p-accordion-panel [value]="day.id">
+              <p-accordion-header>
+                <span class="tip-title">{{ day.generatedAt | date: 'dd/MM/yyyy HH:mm' }} — {{ day.title }}</span>
+                <span class="badge off">{{ day.actions?.length || 0 }} dicas</span>
+              </p-accordion-header>
+              <p-accordion-content>
+                @if (day.summary) { <p class="muted small" style="margin-top:0">{{ day.summary }}</p> }
+                <div class="list">
+                  @for (tip of day.actions; track $index) {
+                    <div class="row">
+                      <div>
+                        <div class="name">{{ tip.ticker || tip.theme }} — {{ tip.action }}</div>
+                        <div class="meta">sinal: {{ tip.signal }}</div>
+                        @if (tip.why) {
+                          <div class="meta">por quê: {{ tip.why }}</div>
+                        }
+                        @if (tip.risk) {
+                          <div class="meta">risco: {{ tip.risk }}</div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </p-accordion-content>
+            </p-accordion-panel>
+          }
+        </p-accordion>
       }
     </section>
 
@@ -204,13 +349,26 @@ interface Brief {
               <span class="badge off">hype {{ item.latest.hypeRisk }}/100</span>
             }
           </div>
+          @if (item.thermometer) {
+            <div class="thermo">
+              <div class="thermo-head">
+                <span>Força do tema <strong>{{ item.thermometer.score }}</strong></span>
+                <span class="badge {{ readingBadge(item.thermometer.reading) }}">{{ item.thermometer.reading }}</span>
+              </div>
+              <div class="thermo-bar"><div class="thermo-fill" [style.width.%]="item.thermometer.score"></div></div>
+              <div class="hint">{{ item.thermometer.label }} · setor x leitura do tema</div>
+              @if (item.thermometer.tip) {
+                <div class="hint" style="margin-top:4px">{{ item.thermometer.tip }}</div>
+              }
+            </div>
+          }
           @if (item.headlines.length) {
             <div class="small muted" style="margin-bottom:8px">
               {{ item.headlines[0].title }}
             </div>
           }
-          <button class="btn secondary" [disabled]="analyzing() === item.slug" (click)="analyze(item.slug)">
-            {{ analyzing() === item.slug ? 'Analisando…' : 'Analisar tema' }}
+          <button class="btn secondary" (click)="analyze(item.slug)">
+            Analisar no chat
           </button>
         </div>
       }
@@ -441,11 +599,20 @@ interface Brief {
 })
 export class OpportunitiesComponent {
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
 
   readonly radar = signal<RadarItem[]>([]);
   readonly cycles = signal<Cycle[]>([]);
   readonly currentCycle = signal<CycleSummary | null>(null);
   readonly actionTips = signal<ActionDigest | null>(null);
+  readonly actionHistory = signal<ActionDigest[]>([]);
+  readonly contrarian = signal<ContrarianItem[]>([]);
+  readonly contrarianLoading = signal(false);
+  readonly contrarianScanned = signal(0);
+  readonly pastTips = computed(() => {
+    const current = this.actionTips()?.id;
+    return this.actionHistory().filter((d) => d.id !== current);
+  });
   readonly brief = signal<Brief | null>(null);
   readonly analyzing = signal<string | null>(null);
   readonly refreshingCycle = signal(false);
@@ -459,6 +626,7 @@ export class OpportunitiesComponent {
     this.loadCycles();
     this.loadCurrentCycle();
     this.loadActionTips();
+    this.loadActionHistory();
   }
 
   loadCycles() {
@@ -496,6 +664,48 @@ export class OpportunitiesComponent {
     });
   }
 
+  loadActionHistory() {
+    this.api.get<ActionDigest[]>('/opportunities/action-tips/history').subscribe({
+      next: (items) => this.actionHistory.set(items || []),
+      error: () => this.actionHistory.set([]),
+    });
+  }
+
+  runContrarian() {
+    this.contrarianLoading.set(true);
+    this.error.set(null);
+    this.api
+      .get<{ scanned: number; items: ContrarianItem[] }>('/opportunities/contrarian?limit=8')
+      .subscribe({
+        next: (res) => {
+          this.contrarianLoading.set(false);
+          this.contrarianScanned.set(res.scanned || 0);
+          this.contrarian.set(res.items || []);
+          if (!res.items?.length) {
+            this.error.set('Nenhum papel em queda com sinal de virada agora.');
+          }
+        },
+        error: (err) => {
+          this.contrarianLoading.set(false);
+          this.error.set(err?.error?.message || 'Não foi possível analisar as quedas.');
+        },
+      });
+  }
+
+  trackContrarian(symbol: string) {
+    this.api.post(`/discovery/tracked/${encodeURIComponent(symbol)}`, {}).subscribe({
+      next: () => this.loadActionHistory(),
+      error: () => undefined,
+    });
+  }
+
+  verdictSeverity(verdict: string): 'success' | 'warn' | 'danger' | 'secondary' {
+    if (verdict === 'Reversão forte') return 'success';
+    if (verdict === 'Reversão em formação') return 'warn';
+    if (verdict === 'Aguardar') return 'secondary';
+    return 'danger';
+  }
+
   refreshActionTips() {
     this.refreshingActions.set(true);
     this.error.set(null);
@@ -503,6 +713,7 @@ export class OpportunitiesComponent {
       next: (item) => {
         this.refreshingActions.set(false);
         this.actionTips.set(item);
+        this.loadActionHistory();
       },
       error: (err) => {
         this.refreshingActions.set(false);
@@ -524,19 +735,15 @@ export class OpportunitiesComponent {
     });
   }
 
+  /** Abre o CHAT com um pedido de análise detalhada do tema — o agente usa
+   * analyze_theme + get_stock_outlook e sugere oportunidades na área. */
   analyze(slug: string) {
-    this.analyzing.set(slug);
-    this.error.set(null);
-    this.api.post<Brief>(`/opportunities/${slug}/analyze`, { mode: this.mode }).subscribe({
-      next: (result) => {
-        this.analyzing.set(null);
-        this.brief.set(result);
-        this.loadRadar();
-        this.loadCurrentCycle();
-      },
-      error: (err) => {
-        this.analyzing.set(null);
-        this.error.set(err?.error?.message || 'Falha ao analisar o tema.');
+    const name = this.radar().find((item) => item.slug === slug)?.name || slug;
+    this.router.navigate(['/app/chat'], {
+      queryParams: {
+        theme: slug,
+        themeName: name,
+        mode: this.mode,
       },
     });
   }
@@ -555,6 +762,18 @@ export class OpportunitiesComponent {
 
   stageClass(stage: string): string {
     return 'stage-' + (stage || 'emergente').toLowerCase();
+  }
+
+  readingBadge(reading: string): string {
+    if (reading === 'Bullish') return 'read-bullish';
+    if (reading === 'Bearish') return 'read-bearish';
+    return 'read-neutro';
+  }
+
+  verdictBadge(verdict?: string): string {
+    if (verdict === 'Oportunidade') return 'read-bullish';
+    if (verdict === 'Evitar') return 'read-bearish';
+    return 'read-neutro';
   }
 
   objectiveLabel(mode?: string): string {

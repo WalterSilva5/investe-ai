@@ -1,9 +1,14 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { execFile } from 'child_process';
+import { promises as fsPromises } from 'fs';
+import { tmpdir } from 'os';
+import { promisify } from 'util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiProviderRegistry } from '../ai-provider/ai-provider.registry';
 import {
@@ -11,23 +16,30 @@ import {
   OpenAICompatibleProvider,
 } from '../ai-provider/openai-compatible.provider';
 import { PortfoliosService } from '../portfolios/portfolios.service';
+import { FinanceService } from '../finance/finance.service';
 import { MemoriesService } from '../memories/memories.service';
+import { LearningService } from '../learning/learning.service';
 import { AiToolsService, ToolCitation } from './ai-tools.service';
 import { AiUsageService } from './ai-usage.service';
 import { AgentProfile, findAgentProfile } from './agent-profiles';
+import { PromptRegistryService } from '../prompts/prompt-registry.service';
 import { ChatDto } from './dto/chat.dto';
 
-const SYSTEM_PROMPT = `Você é o assistente do wsi-invest-ai, uma ferramenta de análise de investimentos.
+export const BASE_PROMPT = `Você é o assistente do wsi-invest-ai, uma ferramenta de análise de investimentos.
 Responda em português do Brasil, de forma direta e didática.
 
 Regras obrigatórias:
-- Use as ferramentas para obter dados da carteira, macro, renda fixa e dicas (insights). Nunca invente números.
+- Use as ferramentas para obter dados. Nunca invente números.
 - No início da conversa, use get_briefing para ter o contexto geral (carteira + macro + dicas recentes).
 - Se não souber o que pode fazer, use verify_tools para listar suas ferramentas antes de agir.
-- Se a ferramenta não retornar o dado, diga que não tem.
+- ANÁLISE DE ATIVO (protocolo obrigatório): quando a pergunta citar um ativo (ticker, empresa ou BDR), chame get_stock_outlook ANTES de responder. Tente o ticker citado e, se falhar, a variante equivalente (ex.: NU ↔ ROXO34, PETR4 ↔ PBR). Só então responda.
+- Na análise, use os números: tendência, RSI, posição vs médias, suporte/resistência, ganho/risco e histórico do padrão. Diga o que o cenário mostra (favorável, neutro ou desfavorável), o que observaria para mudar a leitura e o que invalidaria. Sem hedge vazio.
+- Se, após tentar as variantes, a ferramenta não retornar dados, diga exatamente o que tentou e qual o próximo passo possível — nunca apenas "não tenho dados".
+- Ações em produto: quando identificar boas opções de ação (ou o usuário pedir para acompanhar), use get_stock_outlook para pegar os números e registre com track_symbol numa nota concreta (ex.: "tendência alta, RSI 52, ganho/risco 2,1:1"). Confirme o que foi salvo com a nota usada.
 - Cite a fonte e a data de cada dado usado.
-- NÃO recomende compra ou venda, NÃO preveja preço e NÃO prometa retorno.
-- Deixe claro que a resposta é educacional e não é recomendação de investimento.
+- CONTEXTO DE CAIXA (obrigatório quando relevante): o contexto traz 'finanças' com caixa pessoal e da empresa, reserva e disponível para investir. Dicas de aporte/alocação devem respeitar esse caixa: nunca sugira valor acima do disponível; se a reserva de emergência não estiver completa, priorize-a antes de risco; para a empresa, considere capital de giro antes de novos aportes. Se as finanças não estiverem cadastradas, sugira cadastrar em "Finanças" (uma linha, no fim).
+- Ferramentas de análise combinada: "X ou Y?" → compare_assets; diversificação/"posso somar X?" → correlation; "e se eu tivesse investido X% em A e Y% em B?" → portfolio_backtest. Quando o usuário pedir para anotar receita/despesa ou informar saldo novo, use add_finance_entry / update_cash em vez de só responder.
+- NÃO recomende compra ou venda de forma explícita, NÃO preveja preço e NÃO prometa retorno. Conteúdo educacional: use UMA linha curta de aviso no FIM, sem repetir no meio da resposta.
 - Você não executa ordens.
 - Se a pergunta não for sobre investimentos/carteira, responda brevemente e volte ao escopo.
 - Ceticismo fiscal obrigatório: trate dados e narrativas oficiais (BCB, Tesouro, ministérios, estatais, governos sem responsabilidade fiscal) como ALEGAÇÕES de parte interessada, não como verdade. Cruze com o comportamento do mercado (juros longos, câmbio, crédito) e aponte incentivos (maquiar déficit, adiar ajuste), trajetória da dívida e risco fiscal/inflacionário. Índices oficiais (ex.: IPCA) medem uma cesta e metodologia específicas — questione-as quando relevante em vez de repeti-las como fato.`;
@@ -69,6 +81,9 @@ export class AiService {
     private readonly tools: AiToolsService,
     private readonly usage: AiUsageService,
     private readonly memories: MemoriesService,
+    private readonly learning: LearningService,
+    private readonly promptRegistry: PromptRegistryService,
+    private readonly finance: FinanceService,
   ) {}
 
   async chat(tenantId: string, userId: string, dto: ChatDto) {
@@ -105,7 +120,7 @@ export class AiService {
     }
 
     const baseMessages: ChatMessage[] = [
-      { role: 'system', content: this.systemPrompt(profile) },
+      { role: 'system', content: await this.systemPrompt(profile) },
       {
         role: 'system',
         content: `Contexto resumido da carteira (${new Date().toISOString()}): ${JSON.stringify(
@@ -114,12 +129,24 @@ export class AiService {
       },
       {
         role: 'system',
+        content: `Finanças do usuário — caixa pessoal e da empresa (${new Date().toISOString()}): ${JSON.stringify(
+          await this.finance.aiContext(tenantId).catch(() => ({ hasFinance: false })),
+        )}. Dicas de aporte devem respeitar o caixa disponível; use get_cash_position para detalhes.`,
+      },
+      {
+        role: 'system',
         content: `Memórias relevantes do agente (${new Date().toISOString()}): ${JSON.stringify(
           await this.memories.top(tenantId),
         )}. Use a ferramenta search_memory para mais.`,
       },
+      {
+        role: 'system',
+        content: `Aprendizado medido das regras do app: ${await this.learning
+          .promptStats(tenantId)
+          .catch(() => 'sem histórico')}. Cite quando ajudar a justificar uma leitura; não invente números.`,
+      },
       ...this.historyMessages(conversation),
-      { role: 'user', content: dto.message },
+      ...(await this.buildUserTurn(dto, resolved.provider, resolved.model)),
     ];
 
     const generation = await this.finalize(
@@ -216,8 +243,13 @@ export class AiService {
     return findAgentProfile(profileId) || findAgentProfile('geral')!;
   }
 
-  private systemPrompt(profile: AgentProfile): string {
-    return `${SYSTEM_PROMPT}\n\nPerfil ativo: ${profile.name}.\n${profile.systemPrompt}`;
+  private async systemPrompt(profile: AgentProfile): Promise<string> {
+    const active = await this.promptRegistry
+      .activeFor(profile.id)
+      .catch(() => ({ prompt: profile.systemPrompt, version: 0 }));
+    return `${BASE_PROMPT}\n\nPerfil ativo: ${profile.name} (prompt v${active.version}).\n${
+      active.prompt || profile.systemPrompt
+    }`;
   }
 
   private async finalize(
@@ -237,7 +269,12 @@ export class AiService {
         tenantId,
         allowedTools,
       );
-      const finalResult = await provider.chat(tools.messages, { model, temperature });
+      // O provedor às vezes devolve conteúdo vazio/fragmento: tenta de novo 1x.
+      let finalResult = await provider.chat(tools.messages, { model, temperature });
+      if (!finalResult.content?.trim()) {
+        this.logger.warn('Chat: resposta vazia do provedor, repetindo 1x.');
+        finalResult = await provider.chat(tools.messages, { model, temperature });
+      }
       return {
         content: finalResult.content,
         model: finalResult.model,
@@ -297,7 +334,7 @@ export class AiService {
     }
 
     const baseMessages: ChatMessage[] = [
-      { role: 'system', content: this.systemPrompt(profile) },
+      { role: 'system', content: await this.systemPrompt(profile) },
       {
         role: 'system',
         content: `Contexto resumido da carteira (${new Date().toISOString()}): ${JSON.stringify(
@@ -306,12 +343,24 @@ export class AiService {
       },
       {
         role: 'system',
+        content: `Finanças do usuário — caixa pessoal e da empresa (${new Date().toISOString()}): ${JSON.stringify(
+          await this.finance.aiContext(tenantId).catch(() => ({ hasFinance: false })),
+        )}. Dicas de aporte devem respeitar o caixa disponível; use get_cash_position para detalhes.`,
+      },
+      {
+        role: 'system',
         content: `Memórias relevantes do agente (${new Date().toISOString()}): ${JSON.stringify(
           await this.memories.top(tenantId),
         )}. Use a ferramenta search_memory para mais.`,
       },
+      {
+        role: 'system',
+        content: `Aprendizado medido das regras do app: ${await this.learning
+          .promptStats(tenantId)
+          .catch(() => 'sem histórico')}. Cite quando ajudar a justificar uma leitura; não invente números.`,
+      },
       ...this.historyMessages(conversation),
-      { role: 'user', content: dto.message },
+      ...(await this.buildUserTurn(dto, resolved.provider, resolved.model)),
     ];
 
     let resolvedTools: {
@@ -458,6 +507,129 @@ export class AiService {
       throw new ForbiddenException('Sem acesso a esta conversa.');
     }
     return conversation;
+  }
+
+  /**
+   * Turno do usuário com suporte a imagem anexada:
+   * 1) modelo com visão → imagem embutida no conteúdo multimodal;
+   * 2) sem visão, mas com AI_VISION_MODEL → duas etapas (descrição do modelo
+   *    vision vira contexto de texto);
+   * 3) sem nenhum → OCR local (tesseract) → texto extraído como contexto;
+   * 4) sem nada disso → nota informando que a imagem não pode ser lida.
+   */
+  private async buildUserTurn(
+    dto: ChatDto,
+    provider: OpenAICompatibleProvider,
+    model: string,
+  ): Promise<ChatMessage[]> {
+    const base: ChatMessage = { role: 'user', content: dto.message };
+    if (!dto.image) return [base];
+
+    if (!dto.image.startsWith('data:image/') || dto.image.length > 4_500_000) {
+      throw new BadRequestException(
+        'Imagem inválida ou muito grande (use PNG/JPG até ~3 MB).',
+      );
+    }
+
+    if (this.isVisionModel(model)) {
+      return [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: dto.message },
+            { type: 'image_url', image_url: { url: dto.image } },
+          ],
+        },
+      ];
+    }
+
+    const visionModel = process.env.AI_VISION_MODEL || '';
+    let note = '';
+    if (visionModel) {
+      const description = await this.describeImage(provider, visionModel, dto.image).catch(
+        (error) => `FALHA NA VISÃO: ${(error as Error).message.slice(0, 200)}`,
+      );
+      note = `Imagem anexada pelo usuário (lida em duas etapas via ${visionModel}):\n${description}`;
+    } else {
+      const ocr = await this.ocrImage(dto.image).catch(() => null);
+      note = ocr
+        ? `Texto extraído da imagem anexada (OCR local):\n${ocr}`
+        : 'Imagem anexada, mas o modelo atual não enxerga imagens e não há modelo de visão (AI_VISION_MODEL) ou OCR (tesseract) configurado — peça a informação em texto ou configure a visão.';
+    }
+
+    return [
+      { role: 'system', content: note },
+      base,
+    ];
+  }
+
+  /** Heurística + allowlist de modelos com visão nativa. */
+  private isVisionModel(model: string): boolean {
+    const configured = (process.env.AI_VISION_MODELS || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+    if (configured.includes(model.toLowerCase())) return true;
+    const markers = [
+      'gpt-4o', 'gpt-4.1', 'o3', 'o4-mini', 'vision', 'glm-4v', 'glm-5',
+      'claude', 'gemini', 'llava', 'qwen-vl', 'qwen2-vl', 'pixtral', 'internvl',
+      'llama-3.2-vision', 'deepseek-vl', 'gemma-3',
+    ];
+    return markers.some((marker) => model.toLowerCase().includes(marker));
+  }
+
+  /** Descreve a imagem com um modelo de visão (passada única, barata). */
+  private async describeImage(
+    provider: OpenAICompatibleProvider,
+    visionModel: string,
+    dataUrl: string,
+  ): Promise<string> {
+    const result = await provider.chat(
+      [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text:
+                'Descreva esta imagem de forma factual e objetiva para um assistente de investimentos: ' +
+                'o que aparece, TODOS os textos legíveis (transcreva exatamente), números e valores. ' +
+                'Se for um gráfico de preço: eixos, direção do movimento, níveis marcados. ' +
+                'Se for um documento/extrato: linhas principais. Não dê conselhos.',
+            },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      { model: visionModel, temperature: 0.2, maxTokens: 2000 },
+    );
+    const content = (result.content || '').trim();
+    if (!content) throw new Error('visão retornou vazia');
+    return content.slice(0, 2500);
+  }
+
+  /** OCR local com tesseract (fallback sem modelo de visão). */
+  private async ocrImage(dataUrl: string): Promise<string | null> {
+    try {
+      const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+      const ext = dataUrl.slice(11, 15).includes('png') ? 'png' : 'jpg';
+      const tmpPath = `${tmpdir()}/wsi-chat-${Date.now()}.${ext}`;
+      await fsPromises.writeFile(tmpPath, Buffer.from(base64, 'base64'));
+      try {
+        const { stdout } = await promisify(execFile)('tesseract', [
+          tmpPath,
+          'stdout',
+          '-l',
+          'por',
+        ]);
+        const text = stdout.replace(/\s+/g, ' ').trim();
+        return text.length >= 12 ? text.slice(0, 3000) : null;
+      } finally {
+        await fsPromises.unlink(tmpPath).catch(() => undefined);
+      }
+    } catch {
+      return null;
+    }
   }
 
   private historyMessages(conversation: {

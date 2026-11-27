@@ -2,7 +2,10 @@ import OpenAI from 'openai';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  /** Texto plano ou conteúdo multimodal (texto + imagem) para modelos com visão. */
+  content:
+    | string
+    | Array<{ type: string; text?: string; image_url?: { url: string } }>;
   tool_calls?: unknown[];
   tool_call_id?: string;
   name?: string;

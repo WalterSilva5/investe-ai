@@ -68,6 +68,7 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/portfolios/:id/positions` | Posições (com preço de mercado) |
 | GET | `/portfolios/:id/allocation` | Alocação por tipo e ativo |
 | GET | `/portfolios/:id/summary` | Resumo (patrimônio, P&L) |
+| GET | `/portfolios/:id/income` | Proventos por ativo (total, 12m, DY recebido) |
 | GET | `/portfolios/:id/transactions` | Transações |
 | POST | `/portfolios/:id/transactions` | Cria transação (recalcula posição) |
 | DELETE | `/transactions/:id` | Remove transação |
@@ -86,7 +87,83 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/market/macro` | Selic, IPCA e CDI (BCB) |
 | GET | `/market/international` | Câmbio (USD/EUR/GBP) + ouro, com ouro em BRL |
 | GET | `/market/quote/:symbol` | Cotação (brapi/CoinGecko) |
+| GET | `/market/history?symbol=&range=` | Histórico p/ gráfico (1mo, 3mo, 6mo, 1y, 5y; brapi/CoinGecko) |
+| GET | `/market/levels?symbol=&range=` | Cotação + suportes/resistências + MM20/MM50 (brapi/CoinGecko/Yahoo) |
+| GET | `/market/indicators?symbol=&range=` | Dashboard: preço, RSI(14), médias, volatilidade, variações 1d/1s/1m/3m/1a |
+| GET | `/market/patterns?symbol=&setup=&range=` | Backtest de um padrão num ticker específico (+5/+10/+20 barras) |
+| GET | `/market/seer?range=&limit=&symbols=` | Vidente geral: varre o universo, pega o padrão atual de cada papel e ranqueia pelo histórico |
+| GET | `/market/halving` | Contexto do ciclo do BTC: dias até o próximo halving (estimado), fase e referência histórica |
+
+## Ensino (`/teach`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/teach` | Currículo (6 aulas) com progresso do usuário |
+| GET | `/teach/:id` | Aula completa com dados de mercado AO VIVO (exemplo + exercício) |
+| POST | `/teach/:id/answer` | Corrige o exercício contra os dados atuais (`{ value }`) |
+| POST | `/teach/:id/complete` | Marca a aula como concluída |
+
+## Notificações (`/notifications`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/notifications?take=` | Lista as notificações (mais recentes primeiro) |
+| GET | `/notifications/unread-count` | Contador de não lidas |
+| POST | `/notifications/:id/read` | Marca uma como lida |
+| POST | `/notifications/read-all` | Marca todas como lidas |
+
+Gatilhos automáticos: dicas de ação com veredito `Oportunidade` (🔥) e radar contrário com `Reversão forte` nota ≥70; cron dias úteis 12h roda a varredura de quedas para criar notificações sem ação manual.
+| GET | `/market/outlook?symbol=&range=` | Resumo: veredito (Oportunidade/Aguardar/Evitar), gatilho, invalidação, tendência, score, ganho/risco e histórico do padrão |
 | POST | `/market/refresh` | Atualiza cotações da carteira padrão |
+
+## Aprendizado (`/learning`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/learning/outlook?symbol=&range=` | Outlook com score calibrado pela taxa de acerto histórica da regra + registro do sinal do dia |
+| GET | `/learning/summary` | Desempenho por regra (acerto, retorno médio, status de calibração) |
+| POST | `/learning/evaluate` | Avalia sinais pendentes com 14+ dias (também roda no cron dias úteis 19h) |
+
+## Descobertas (`/discovery`)
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/discovery/tracked` | Watchlist do usuário (descobertos + manuais) |
+| POST | `/discovery/scan?limit=` | Varre o universo, pontua e grava os melhores (também roda no cron 2ª 8h) |
+| POST | `/discovery/tracked/:symbol` | Adiciona ticker manualmente |
+| DELETE | `/discovery/tracked/:symbol` | Remove da watchlist |
+
+## Paper trading (`/paper`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/paper/portfolio` | Propostas + posições simuladas, retorno % e comparação pro-rata com o CDI |
+| POST | `/paper/generate` | Gera propostas a partir do último digest de dicas de ação (veredito "Oportunidade") e executa no paper na cotação atual — sem duplicar símbolo no mesmo dia |
+| POST | `/paper/proposals/:id/reject` | Recusa a proposta (sai da fila, não entra no paper) |
+
+Simulação de ordens: sem dinheiro real e sem execução em corretora. O ciclo roda no cron dias úteis 18h30 (gate `PAPER_AUTO`).
+
+## Prompts do agente (`/prompts`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/prompts/profiles` | Perfis disponíveis (geral, renda fixa, planejador, macro, cripto) |
+| GET | `/prompts?profile=` | Versões do perfil (ativa, candidatos, arquivadas) com nota da avaliação |
+| GET | `/prompts/:id` | Detalhe da versão + últimas avaliações |
+| POST | `/prompts` | Cria versão **candidata** (`{ profileId, systemPrompt, notes }`) — não ativa |
+| POST | `/prompts/:id/evaluate` | Roda o conjunto dourado e salva a nota (`{ score, baseline, verdict, results }`) |
+| POST | `/prompts/:id/activate` | Ativa a versão (arquiva a anterior) |
+| POST | `/prompts/tune?profile=` | Auto-ajuste: redige candidato com base nas falhas medidas, avalia e promove só com margem (+ cron diário 7h) |
+| POST | `/prompts/swarm?profiles=` | Swarm: auto-ajuste para todos os perfis em paralelo (+ cron toda segunda 7h) |
+| POST | `/ai/chat` (com `image`) | Mensagem + imagem anexada (data URL): visão direta se o modelo enxerga, duas etapas (`AI_VISION_MODEL`) ou OCR local (tesseract) |
+| GET | `/prompts/sim/results` | Runs recentes do backtest de prompts por classe de ativo |
+| GET | `/prompts/sim/best` | Melhor variante de prompt por classe (pela nota do backtest) |
+| POST | `/prompts/sim/run` | Roda a matriz de simulação: âncoras no passado × variantes × classes (leva minutos) |
+| GET | `/market/whatif` | Simulador de passado: valor inicial + aporte mensal + janela → valor final, lucro, ROI, anualizada, drawdown, ano a ano e comparativo CDI |
+| GET | `/finance/summary` | Caixa pessoal + empresa, reserva, disponível para investir, excedente mensal e runway |
+| PATCH | `/finance/books/:id` | Atualiza caixa/reserva/label de um livro financeiro |
+| POST | `/finance/books/:id/entries` | Lança receita/despesa no livro |
+| GET | `/finance/books/:id/entries` | Lançamentos recentes do livro |
+| DELETE | `/finance/entries/:id` | Remove lançamento |
 
 ## Alertas (`/alerts`)
 
@@ -168,10 +245,12 @@ Documentação interativa: `GET /api/docs` (Swagger).
 | GET | `/opportunities/themes` | Catálogo de temas/narrativas |
 | GET | `/opportunities/cycles` | Ciclos históricos e lições |
 | GET | `/opportunities/radar?mode=` | Atenção + tendência + último brief do modo por tema |
+| GET | `/opportunities/contrarian?limit=` | Radar contrário: papéis que caíram com sinal de virada (sobrevenda, suporte, ganho/risco) |
 | GET | `/opportunities/current-cycle` | Último resumo do ciclo atual |
 | POST | `/opportunities/current-cycle/refresh` | Regenera o resumo a partir de todas as análises (+ cron semanal 2ª 9h) |
 | GET | `/opportunities/action-tips` | Último digest de dicas de ação |
-| POST | `/opportunities/action-tips/refresh` | Gera dicas a partir do estado do radar (+ cron semanal 2ª 9h) |
+| POST | `/opportunities/action-tips/refresh` | Gera dicas por ticker (com momentum e destaque do dia) ou por tema (+ cron semanal 2ª 9h) |
+| GET | `/opportunities/action-tips/history` | Histórico por dia (últimos 30 digests) |
 | GET | `/opportunities?theme=` | Briefs gerados |
 | POST | `/opportunities/:theme/analyze` | Gera análise (`{ mode: growth\|conservative }`) |
 

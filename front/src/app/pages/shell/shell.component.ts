@@ -12,11 +12,18 @@ import { MessageService } from 'primeng/api';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { InsightsService } from '../../core/insights.service';
+import { ChatWidgetComponent } from '../../shared/chat-widget.component';
+import { NotificationsBellComponent } from '../../shared/notifications-bell.component';
 
 interface NavItem {
   path: string;
   label: string;
   icon: string;
+}
+
+interface NavGroup {
+  title?: string;
+  items: NavItem[];
 }
 
 @Component({
@@ -33,6 +40,8 @@ interface NavItem {
     DialogModule,
     ToastModule,
     BadgeModule,
+    ChatWidgetComponent,
+    NotificationsBellComponent,
   ],
   providers: [MessageService],
   template: `
@@ -41,6 +50,7 @@ interface NavItem {
       <p-button icon="pi pi-bars" [text]="true" (onClick)="drawer.set(true)" ariaLabel="Abrir menu" />
       <div class="logo">wsi<span>-invest-ai</span></div>
       <div class="grow"></div>
+      <app-notifications-bell />
       <p-button
         [icon]="dark() ? 'pi pi-sun' : 'pi pi-moon'"
         [text]="true"
@@ -51,7 +61,10 @@ interface NavItem {
 
     <div class="layout">
       <aside class="sidebar desktop">
-        <div class="logo">wsi<span>-invest-ai</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="logo">wsi<span>-invest-ai</span></div>
+          <app-notifications-bell />
+        </div>
         <ng-container *ngTemplateOutlet="workspaceBlock" />
         <ng-container *ngTemplateOutlet="navBlock" />
         <div class="spacer"></div>
@@ -63,6 +76,8 @@ interface NavItem {
       </main>
     </div>
 
+    <app-chat-widget />
+
     <p-drawer
       [visible]="drawer()"
       (visibleChange)="drawer.set($event)"
@@ -70,7 +85,10 @@ interface NavItem {
       styleClass="mobile-drawer"
     >
       <aside class="sidebar" style="height:100%">
-        <div class="logo">wsi<span>-invest-ai</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="logo">wsi<span>-invest-ai</span></div>
+          <app-notifications-bell />
+        </div>
         <ng-container *ngTemplateOutlet="workspaceBlock" />
         <ng-container *ngTemplateOutlet="navBlock" />
         <div class="spacer"></div>
@@ -95,16 +113,21 @@ interface NavItem {
     </ng-template>
 
     <ng-template #navBlock>
-      @for (item of nav(); track item.path) {
-        <a [routerLink]="item.path" routerLinkActive="active" (click)="drawer.set(false)">
-          <i class="pi {{ item.icon }}"></i> {{ item.label }}
-          @if (item.path === '/app/insights' && insights.unread() > 0) {
-            <p-badge [value]="insights.unread()" severity="info" />
-          }
-          @if (item.path === '/app/admin') {
-            <i class="pi pi-lock" style="font-size:11px;opacity:.6"></i>
-          }
-        </a>
+      @for (group of navGroups(); track group.title) {
+        @if (group.title) {
+          <div class="nav-group-title">{{ group.title }}</div>
+        }
+        @for (item of group.items; track item.path) {
+          <a [routerLink]="item.path" routerLinkActive="active" (click)="drawer.set(false)">
+            <i class="pi {{ item.icon }}"></i> {{ item.label }}
+            @if (item.path === '/app/insights' && insights.unread() > 0) {
+              <p-badge [value]="insights.unread()" severity="info" />
+            }
+            @if (item.path === '/app/admin') {
+              <i class="pi pi-lock" style="font-size:11px;opacity:.6"></i>
+            }
+          </a>
+        }
       }
       <p-button
         [icon]="dark() ? 'pi pi-sun' : 'pi pi-moon'"
@@ -187,22 +210,56 @@ export class ShellComponent {
   companyCnpj = '';
   selectedWorkspace = '';
 
-  readonly nav = signal<NavItem[]>([
-    { path: '/app/overview', label: 'Visão geral', icon: 'pi-home' },
-    { path: '/app/insights', label: 'Insights de IA', icon: 'pi-sparkles' },
-    { path: '/app/opportunities', label: 'Radar de oportunidades', icon: 'pi-compass' },
-    { path: '/app/business', label: 'Oportunidades de negócio', icon: 'pi-briefcase' },
-    { path: '/app/portfolio', label: 'Carteira', icon: 'pi-wallet' },
-    { path: '/app/banking', label: 'Extratos', icon: 'pi-receipt' },
-    { path: '/app/analysis', label: 'Análise', icon: 'pi-chart-line' },
-    { path: '/app/fixed-income', label: 'Renda fixa', icon: 'pi-percentage' },
-    { path: '/app/alerts', label: 'Alertas', icon: 'pi-bell' },
-    { path: '/app/chat', label: 'Chat / análise', icon: 'pi-comments' },
-    { path: '/app/notes', label: 'Diário', icon: 'pi-file-edit' },
-    { path: '/app/memories', label: 'Memórias', icon: 'pi-database' },
-    { path: '/app/security', label: 'Segurança', icon: 'pi-shield' },
-    { path: '/app/admin', label: 'Admin', icon: 'pi-cog' },
-    { path: '/app/settings', label: 'Provedores de IA', icon: 'pi-sliders-h' },
+  /** Topo: as seis telas do dia a dia. Demais telas agrupadas por tema. */
+  readonly navGroups = signal<NavGroup[]>([
+    {
+      items: [
+        { path: '/app/overview', label: 'Visão geral', icon: 'pi-home' },
+        { path: '/app/opportunities', label: 'Radar de oportunidades', icon: 'pi-compass' },
+        { path: '/app/insights', label: 'Insights de IA', icon: 'pi-sparkles' },
+        { path: '/app/tracking', label: 'Tracking de ações', icon: 'pi-chart-bar' },
+        { path: '/app/portfolio', label: 'Carteira', icon: 'pi-wallet' },
+        { path: '/app/seer', label: 'Vidente de dicas', icon: 'pi-eye' },
+      ],
+    },
+    {
+      title: 'Mercado & análise',
+      items: [
+        { path: '/app/analysis', label: 'Análise', icon: 'pi-chart-line' },
+        { path: '/app/whatif', label: 'Simulador de passado', icon: 'pi-replay' },
+        { path: '/app/fixed-income', label: 'Renda fixa', icon: 'pi-percentage' },
+        { path: '/app/discovery', label: 'Descobertas', icon: 'pi-search' },
+        { path: '/app/paper', label: 'Paper trading', icon: 'pi-money-bill' },
+        { path: '/app/alerts', label: 'Alertas', icon: 'pi-bell' },
+      ],
+    },
+    {
+      title: 'Dia a dia',
+      items: [
+        { path: '/app/finance', label: 'Finanças', icon: 'pi-wallet' },
+        { path: '/app/banking', label: 'Extratos', icon: 'pi-receipt' },
+        { path: '/app/notes', label: 'Diário', icon: 'pi-file-edit' },
+        { path: '/app/teach', label: 'Aprender a investir', icon: 'pi-book' },
+      ],
+    },
+    {
+      title: 'Agente de IA',
+      items: [
+        { path: '/app/chat', label: 'Chat / análise', icon: 'pi-comments' },
+        { path: '/app/memories', label: 'Memórias', icon: 'pi-database' },
+        { path: '/app/prompts', label: 'Prompts do agente', icon: 'pi-comment' },
+        { path: '/app/settings', label: 'Provedores de IA', icon: 'pi-sliders-h' },
+      ],
+    },
+    {
+      title: 'Sistema',
+      items: [
+        { path: '/app/business', label: 'Oportunidades de negócio', icon: 'pi-briefcase' },
+        { path: '/app/learning', label: 'Autonomia', icon: 'pi-graduation-cap' },
+        { path: '/app/security', label: 'Segurança', icon: 'pi-shield' },
+        { path: '/app/admin', label: 'Admin', icon: 'pi-cog' },
+      ],
+    },
   ]);
 
   constructor() {

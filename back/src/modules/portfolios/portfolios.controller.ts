@@ -38,6 +38,11 @@ export class PortfoliosController {
     return this.portfolios.get(tenantId, id);
   }
 
+  @Get(':id/income')
+  income(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.portfolios.income(tenantId, id);
+  }
+
   @Patch(':id')
   update(
     @TenantId() tenantId: string,

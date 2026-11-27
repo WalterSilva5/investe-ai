@@ -26,4 +26,9 @@ export class ChatDto {
   @IsOptional()
   @IsString()
   profile?: string;
+
+  /** Imagem anexada como data URL (data:image/...;base64,...). Opcional. */
+  @IsOptional()
+  @IsString()
+  image?: string;
 }

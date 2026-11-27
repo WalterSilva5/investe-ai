@@ -179,9 +179,72 @@ export class PortfoliosService {
     };
   }
 
+  /**
+   * Proventos recebidos (DIVIDEND/INTEREST) por ativo: total, últimos 12m e
+   * DY recebido (12m / valor atual). Base para o "dividend yield" real.
+   */
+  async income(tenantId: string, portfolioId: string) {
+    const portfolio = await this.get(tenantId, portfolioId);
+    const positions = await this.positions(tenantId, portfolioId);
+    const byAsset = new Map(positions.map((p) => [p.assetId, p]));
+
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 1);
+
+    const txs = await this.prisma.transaction.findMany({
+      where: {
+        portfolioId: portfolio.id,
+        type: { in: ['DIVIDEND', 'INTEREST'] },
+      },
+      include: { asset: { select: { id: true, symbol: true, name: true } } },
+      orderBy: { date: 'desc' },
+    });
+
+    const acc = new Map<
+      string,
+      { symbol: string; name: string; total: number; last12m: number; count: number; lastDate: Date | null }
+    >();
+    for (const tx of txs) {
+      const value = Number(tx.quantity) * Number(tx.price);
+      if (!(value > 0)) continue;
+      const entry = acc.get(tx.assetId) || {
+        symbol: tx.asset.symbol,
+        name: tx.asset.name,
+        total: 0,
+        last12m: 0,
+        count: 0,
+        lastDate: null,
+      };
+      entry.total += value;
+      entry.count += 1;
+      if (tx.date >= cutoff) entry.last12m += value;
+      if (!entry.lastDate || tx.date > entry.lastDate) entry.lastDate = tx.date;
+      acc.set(tx.assetId, entry);
+    }
+
+    const items = [...acc.entries()].map(([assetId, e]) => {
+      const pos = byAsset.get(assetId);
+      const base = pos && pos.currentValue > 0 ? pos.currentValue : pos?.invested || 0;
+      return {
+        assetId,
+        symbol: e.symbol,
+        name: e.name,
+        totalReceived: Math.round(e.total * 100) / 100,
+        last12m: Math.round(e.last12m * 100) / 100,
+        dyPct: base > 0 ? Math.round((e.last12m / base) * 10000) / 100 : 0,
+        payments: e.count,
+        lastDate: e.lastDate,
+      };
+    });
+
+    const total = items.reduce((s, i) => s + i.totalReceived, 0);
+    const total12m = items.reduce((s, i) => s + i.last12m, 0);
+    items.sort((a, b) => b.totalReceived - a.totalReceived);
+    return { portfolioId: portfolio.id, totalReceived: total, totalLast12m: total12m, items };
+  }
+
   /** Contexto compacto para o agente de IA. */
-  async aiContext(tenantId: string) {
-    const portfolio =
+  async aiContext(tenantId: string) {    const portfolio =
       (await this.prisma.portfolio.findFirst({
         where: { tenantId, isDefault: true },
       })) ||

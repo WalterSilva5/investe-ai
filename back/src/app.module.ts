@@ -25,8 +25,15 @@ import { AiProviderModule } from './modules/ai-provider/ai-provider.module';
 import { AiModule } from './modules/ai/ai.module';
 import { InsightsModule } from './modules/insights/insights.module';
 import { BankingModule } from './modules/banking/banking.module';
+import { FinanceModule } from './modules/finance/finance.module';
 import { OpportunitiesModule } from './modules/opportunities/opportunities.module';
+import { LearningModule } from './modules/learning/learning.module';
+import { DiscoveryModule } from './modules/discovery/discovery.module';
+import { PromptsModule } from './modules/prompts/prompts.module';
+import { TeachModule } from './modules/teach/teach.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BusinessModule } from './modules/business/business.module';
+import { PaperModule } from './modules/paper/paper.module';
 
 @Module({
   imports: [
@@ -55,8 +62,15 @@ import { BusinessModule } from './modules/business/business.module';
     AiModule,
     InsightsModule,
     BankingModule,
+    FinanceModule,
     OpportunitiesModule,
     BusinessModule,
+    LearningModule,
+    DiscoveryModule,
+    PromptsModule,
+    PaperModule,
+    TeachModule,
+    NotificationsModule,
   ],
   providers: [
     {
