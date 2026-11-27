@@ -105,7 +105,7 @@ interface PaperPortfolio {
     </div>
 
     <p-card header="Propostas (fila)" styleClass="mt-card">
-      <p-table [value]="proposals()" stripedRows>
+      <p-table [value]="queue()" stripedRows>
         <ng-template #header>
           <tr>
             <th>Ativo</th>
@@ -220,6 +220,10 @@ export class PaperComponent {
   readonly totals = signal<Totals | null>(null);
   readonly positions = signal<Position[]>([]);
   readonly proposals = signal<Proposal[]>([]);
+  /** Fila = propostas ainda não executadas. */
+  queue(): Proposal[] {
+    return this.proposals().filter((p) => !p.executedAt);
+  }
   readonly cdi = signal<Cdi | null>(null);
   readonly generating = signal(false);
   readonly message = signal<string | null>(null);

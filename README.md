@@ -65,11 +65,25 @@ Assistente pessoal de investimentos com **agente de IA**: organiza carteira, com
 ## Início rápido
 
 ```bash
-cd wsi-invest-ai
-./scripts/up.sh        # sobe API (3000) e front (4200) — SQLite, sem Docker
+git clone https://github.com/WalterSilva5/investe-ai.git && cd investe-ai
+./scripts/install.sh    # instala dependências, cria .env, banco e usuários demo
+./scripts/up.sh         # sobe API (3000) e front (4200)
 ```
 
-Ou manualmente:
+Pré-requisito: **Node 20+**. Sem Docker — SQLite em arquivo.
+
+Abra **http://localhost:4200** e entre com um dos usuários do seed:
+
+| E-mail | Senha | Perfil |
+|---|---|---|
+| `admin@wsi.local` | `admin123` | admin (acesso a `/admin`) |
+| `demo@wsi.local` | `demo123` | carteira de exemplo (ações, FIIs, ETF, cripto e renda fixa) |
+
+- **API:** http://localhost:3000/api · **Swagger:** http://localhost:3000/api/docs
+- O chat precisa de uma chave de IA: configure `OPENCODE_API_KEY` (ou outro provedor) em `back/.env`. Sem chave, o resto do app funciona normalmente.
+- `AUTH_ENABLED=false` (padrão no modo local) abre o app sem login; defina `=true` para exigir.
+
+Manualmente, se preferir:
 
 ```bash
 cd back && cp .env.example .env   # edite segredos e OPENCODE_API_KEY
@@ -78,16 +92,24 @@ cd back && nohup node dist/main > /tmp/wsi-api.log 2>&1 &
 cd ../front && npm install && npm start -- --host 0.0.0.0
 ```
 
-**Usuários de demonstração (via `npm run seed`):**
+## Instalar com um agente de IA
 
-| E-mail | Senha | Perfil |
-|---|---|---|
-| `admin@wsi.local` | `admin123` | admin (acesso a `/admin`) |
-| `demo@wsi.local` | `demo123` | carteira de exemplo (ações, FIIs, ETF, cripto e renda fixa) |
+Clone o repositório, abra o agente (OpenCode, Claude Code, Cursor, Copilot…) na pasta e cole:
 
-- **Web:** http://localhost:4200
-- **API:** http://localhost:3000/api
-- **Swagger:** http://localhost:3000/api/docs
+```text
+Instale e rode o projeto wsi-invest-ai que está nesta pasta:
+1. Leia o README.md (seção "Início rápido") e docs/10-api.md para entender a estrutura.
+2. Execute ./scripts/install.sh. Se algum passo falhar, diagnostique e corrija antes de seguir.
+3. Configure a chave de IA: preencha OPENCODE_API_KEY em back/.env (me pergunte o valor se não tiver).
+4. Suba com ./scripts/up.sh e valide: curl http://localhost:3000/api/health deve responder {"status":"ok"}.
+5. Me devolva os links do app (4200), da API (3000) e as credenciais de demo.
+Regras: não edite código-fonte, não faça commit/push, não exponha chaves. Se algo exigir
+decisão minha, pare e pergunte.
+```
+
+O agente também é útil depois da instalação: os docs `docs/*.md` descrevem cada módulo e o
+`scripts/self-maintenance.sh` roda testes/builds e corrige falhas de forma isolada (worktree,
+sem push automático).
 
 ## Prints
 
@@ -119,9 +141,17 @@ cd ../front && npm install && npm start -- --host 0.0.0.0
 |---|---|
 | ![Halving](docs/prints/13-halving.jpeg) | ![Prompts](docs/prints/14-prompts.jpeg) |
 
-| Módulo de ensino (Aprender) |
+| Módulo de ensino (Aprender) | Finanças (caixa PF + PJ) |
+|---|---|
+| ![Ensino](docs/prints/15-ensino.jpeg) | ![Finanças](docs/prints/16-financas.jpeg) |
+
+| Simulador de passado | Paper trading |
+|---|---|
+| ![Simulador](docs/prints/17-simulador.jpeg) | ![Paper](docs/prints/18-paper.jpeg) |
+
+| Notificações de oportunidades |
 |---|
-| ![Ensino](docs/prints/15-ensino.jpeg) |
+| ![Notificações](docs/prints/19-notificacoes.jpeg) |
 
 ## Estrutura
 

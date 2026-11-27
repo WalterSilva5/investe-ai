@@ -58,6 +58,16 @@ export class PaperService {
 
     let created = 0;
     let skipped = 0;
+    // Posição líquida executada até agora: SELL sem posição não executa (vai para a fila).
+    const executedRows = await this.prisma.orderProposal.findMany({
+      where: { tenantId, executedAt: { not: null } },
+      select: { symbol: true, side: true, quantity: true },
+    });
+    const netQty = new Map<string, number>();
+    for (const row of executedRows) {
+      const delta = row.side === 'SELL' ? -row.quantity : row.quantity;
+      netQty.set(row.symbol, (netQty.get(row.symbol) || 0) + delta);
+    }
     for (const action of actions) {
       const symbol = String(action.ticker || '').trim().toUpperCase();
       if (!symbol) {
@@ -77,6 +87,10 @@ export class PaperService {
       const side = REDUCE_PATTERN.test(`${action.action || ''} ${action.why || ''}`)
         ? 'SELL'
         : 'BUY';
+      // SELL sem posição líquida comprada não executa sozinho: ficaria "short"
+      // sem custo (posição fantasma). Vai para a fila para o usuário decidir.
+      const holdQty = netQty.get(symbol) || 0;
+      const willExecute = side === 'BUY' || holdQty > 0;
       try {
         const quote = await this.quotes.getQuote(symbol);
         const now = new Date();
@@ -92,10 +106,13 @@ export class PaperService {
             verdict: action.verdict,
             reason: [action.why, action.trigger].filter(Boolean).join(' · ').slice(0, 500) || null,
             status: 'paper',
-            executedAt: now,
-            paperPrice: quote.price,
+            executedAt: willExecute ? now : null,
+            paperPrice: willExecute ? quote.price : null,
           },
         });
+        if (willExecute) {
+          netQty.set(symbol, holdQty + (side === 'SELL' ? -DEFAULT_QUANTITY : DEFAULT_QUANTITY));
+        }
         alreadyToday.add(symbol);
         created += 1;
       } catch (error) {
@@ -117,10 +134,9 @@ export class PaperService {
       take: 100,
     });
 
-    // Posições: agrega as propostas ainda em paper por símbolo (líquido).
-    const symbols = [...new Set(
-      proposals.filter((p) => p.status === 'paper').map((p) => p.symbol),
-    )];
+    // Posições: só propostas EXECUTADAS compõem posição (fila não executa).
+    const executedProposals = proposals.filter((p) => p.executedAt != null);
+    const symbols = [...new Set(executedProposals.map((p) => p.symbol))];
     const priceBySymbol = new Map<string, number | null>();
     await Promise.all(symbols.map(async (symbol) => {
       try {
@@ -132,7 +148,7 @@ export class PaperService {
     }));
 
     const positions = symbols.map((symbol) => {
-      const rows = proposals.filter((p) => p.status === 'paper' && p.symbol === symbol);
+      const rows = executedProposals.filter((p) => p.symbol === symbol);
       const buys = rows.filter((p) => p.side === 'BUY');
       const sells = rows.filter((p) => p.side === 'SELL');
       const buyCost = buys.reduce((acc, p) => acc + p.quantity * (p.paperPrice ?? p.price), 0);
@@ -167,7 +183,7 @@ export class PaperService {
       : 0;
 
     // CDI pro-rata por dias corridos desde a primeira execução do paper.
-    const executed = proposals.filter((p) => p.executedAt);
+    const executed = executedProposals;
     const firstAt = executed.length
       ? executed.reduce((min, p) => (p.executedAt! < min ? p.executedAt! : min), executed[0].executedAt!)
       : null;
