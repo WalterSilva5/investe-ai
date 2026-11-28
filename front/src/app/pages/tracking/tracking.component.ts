@@ -29,7 +29,7 @@ interface Indicators {
   resistances: number[];
   distSupportPct: number | null;
   distResistancePct: number | null;
-  points: Array<{ date: string; close: number }>;
+  points: Array<{ date: string; close: number; open?: number; high?: number; low?: number }>;
 }
 
 interface Outlook {
@@ -352,9 +352,24 @@ const REFRESH_MS = 60_000;
       </div>
 
       <p-card styleClass="chart-card mt-card">
+        <div class="chart-mode" style="display:flex;gap:4px;margin-bottom:6px">
+          <button class="chip" [class.active]="chartMode() === 'line'" (click)="chartMode.set('line')">Linha</button>
+          <button
+            class="chip"
+            [class.active]="chartMode() === 'candle'"
+            (click)="chartMode.set('candle')"
+            [title]="candleAvailable() ? 'Velas (OHLC)' : 'Velas indisponíveis: provedor sem OHLC (cripto/fallback)'"
+          >
+            Velas
+          </button>
+        </div>
         <app-price-chart
           [labels]="labels()"
           [values]="values()"
+          [opens]="candleField('open')"
+          [highs]="candleField('high')"
+          [lows]="candleField('low')"
+          [mode]="chartMode()"
           [supports]="d.supports"
           [resistances]="d.resistances"
           [title]="d.symbol + ' (' + d.currency + ')'"
@@ -588,6 +603,18 @@ export class TrackingComponent implements OnDestroy {
 
   values() {
     return (this.data()?.points || []).map((p) => p.close);
+  }
+
+  /** Velas: OHLC da série (quando o provedor entrega). */
+  readonly chartMode = signal<'line' | 'candle'>('candle');
+
+  candleField(field: 'open' | 'high' | 'low'): number[] {
+    return (this.data()?.points || []).map((p) => (field in p ? (p[field] as number) : NaN));
+  }
+
+  candleAvailable(): boolean {
+    const points = this.data()?.points || [];
+    return points.length > 0 && points.every((p) => p.open != null && p.high != null && p.low != null);
   }
 
   changes() {

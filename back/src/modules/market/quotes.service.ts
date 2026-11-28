@@ -32,7 +32,13 @@ export interface Quote {
 }
 
 interface HistoryResult {
-  points: Array<{ date: string; close: number }>;
+  points: Array<{
+    date: string;
+    close: number;
+    open?: number;
+    high?: number;
+    low?: number;
+  }>;
   currency: string;
   source: string;
 }
@@ -470,12 +476,28 @@ export class QuotesService {
     const response = await fetch(url);
     if (response.ok) {
       const data = (await response.json()) as {
-        results?: Array<{ historicalDataPrice?: Array<{ date: number; close: number }>; currency?: string }>;
+        results?: Array<{
+          historicalDataPrice?: Array<{
+            date: number;
+            close: number;
+            open?: number;
+            high?: number;
+            low?: number;
+          }>;
+          currency?: string;
+        }>;
       };
       const first = data.results?.[0];
       const points = (first?.historicalDataPrice || [])
         .filter((p) => p?.close > 0)
-        .map((p) => ({ date: new Date(p.date * 1000).toISOString().slice(0, 10), close: p.close }));
+        .map((p) => ({
+          date: new Date(p.date * 1000).toISOString().slice(0, 10),
+          close: p.close,
+          // Velas: quando a brapi entrega OHLC, vai junto (Yahu fallback só fecha).
+          ...(Number(p.open) > 0 && Number(p.high) > 0 && Number(p.low) > 0
+            ? { open: Number(p.open), high: Number(p.high), low: Number(p.low) }
+            : {}),
+        }));
       if (points.length) return { points, currency: first?.currency || 'BRL', source: 'brapi.dev' };
     }
     // Fallback gratuito (sem chave): Yahoo cobre EUA e mundo.
